@@ -1,3 +1,4 @@
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Env, Props } from "./env.js";
 import { accessToken, GoogleError } from "./google.js";
 
@@ -41,4 +42,31 @@ export function makeKit(env: Env, props: Props) {
       }
     };
   return { tok, runWith };
+}
+
+const READ_ONLY = new Set([
+  "whoami", "list_courses", "get_course_overview", "list_assignments", "get_assignment_bundle", "list_announcements", "list_materials",
+  "get_submission_status", "read_attachment", "get_profile", "map_profile_to_template", "verify_turned_in", "analyze_template", "weekly_plan",
+  "get_rubric", "list_topics", "get_stream", "search_course_context", "get_grades", "check_requirements", "prepare_submission",
+]);
+const DESTRUCTIVE = new Set(["delete_my_data", "edit_student_doc"]);
+
+/** Attach MCP safety hints to every tool as it is registered so AI clients can skip approval for read-only calls. */
+export function annotateTools(server: McpServer) {
+  const original = server.registerTool.bind(server) as (...a: any[]) => unknown;
+  (server as any).registerTool = (name: string, config: any, handler: any) =>
+    original(
+      name,
+      {
+        ...config,
+        annotations: {
+          readOnlyHint: READ_ONLY.has(name),
+          destructiveHint: DESTRUCTIVE.has(name),
+          idempotentHint: READ_ONLY.has(name) || name === "update_profile",
+          openWorldHint: false,
+          ...config.annotations,
+        },
+      },
+      handler,
+    );
 }

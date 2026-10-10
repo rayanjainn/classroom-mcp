@@ -8,6 +8,14 @@ async function hmac(secret: string, data: string) {
   return b64(await crypto.subtle.sign("HMAC", key, enc.encode(data)));
 }
 
+/** JSON with object keys sorted, so the same arguments always hash the same. */
+export function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value && typeof value === "object")
+    return `{${Object.keys(value).sort().filter((k) => (value as any)[k] !== undefined).map((k) => `${JSON.stringify(k)}:${canonical((value as any)[k])}`).join(",")}}`;
+  return JSON.stringify(value) ?? "null";
+}
+
 export async function sha256(text: string) {
   return b64(await crypto.subtle.digest("SHA-256", enc.encode(text)));
 }

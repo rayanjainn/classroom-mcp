@@ -112,6 +112,7 @@ export function buildAppend(blocks: EditBlockT[], start: number, leadingBreak = 
         for (const line of b.text.split(/\n{2,}/)) para(parseInline(line.replace(/\n/g, " ")), "NORMAL_TEXT");
         break;
       case "list": {
+        if (!b.items.length) break;
         const s = idx;
         for (const it of b.items) para(parseInline(it), "NORMAL_TEXT");
         requests.push({

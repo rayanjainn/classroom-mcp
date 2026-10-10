@@ -10,7 +10,7 @@
     "dev": "npm run dev -w @classroompilot/gateway",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "deploy": "npm run deploy -w @classroompilot/gateway",
-    "test": "tsx tests/unit.ts"
+    "test": "tsx tests/unit.ts && tsx tests/e2e.ts"
   },
   "devDependencies": {
     "tsx": "^4.23.15",

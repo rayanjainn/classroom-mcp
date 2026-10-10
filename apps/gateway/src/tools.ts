@@ -11,7 +11,7 @@ import { EditBlock } from "./docedit.js";
 import {
   CourseSettingsSchema, deleteAll, getCourseSettings, getProfile, ProfileSchema, scanPlaceholders, updateCourseSettings, updateProfile,
 } from "./profile.js";
-import { checkConfirm, issueConfirm, sha256 } from "./security.js";
+import { canonical, checkConfirm, issueConfirm, sha256 } from "./security.js";
 
 export function registerTools(server: McpServer, env: Env, props: Props) {
   const { runWith } = makeKit(env, props);
@@ -308,7 +308,7 @@ export function registerTools(server: McpServer, env: Env, props: Props) {
       if (!a.replacements?.length && !a.appendBlocks?.length) return { error: "Nothing to do: give replacements and/or appendBlocks." };
 
       const { confirmToken, ...core } = a;
-      const argsHash = await sha256(JSON.stringify(core));
+      const argsHash = await sha256(canonical(core));
       const secret = env.GOOGLE_CLIENT_SECRET;
       const docUrl = `https://docs.googleapis.com/v1/documents/${a.fileId}`;
       const doc = await gget<any>(t, docUrl);

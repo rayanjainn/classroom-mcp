@@ -17,15 +17,16 @@ export const docsFont = (f: DocSpecT["meta"]["font"]) => FONT[f];
 export function specToEditBlocks(spec: DocSpecT): DocsRender {
   const notes: string[] = [];
   const lint = lintSpec(spec);
-  const cited = citedKeys(allText(spec));
   const bib = new Map(spec.bibliography.map((b) => [b.key, b]));
+  const cited = citedKeys(allText(spec));
+  const numbering = cited.filter((k) => bib.has(k));
   const style = spec.meta.citationStyle;
 
   const cite = (s: string) =>
     s.replace(/\[@([^\]\n]+)\]/g, (_m, inner: string) => {
       const keys = citedKeys([`[@${inner}]`]);
       for (const k of keys) if (!bib.has(k)) lint.push({ level: "warning", message: `Citation [@${k}] has no bibliography entry` });
-      return inText(keys, bib, cited, style);
+      return inText(keys, bib, numbering, style);
     });
 
   const out: EditBlockT[] = [];

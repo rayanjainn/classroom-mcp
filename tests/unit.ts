@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { safeMath, esc } from "../apps/gateway/src/latex.ts";
 import { scanPlaceholders } from "../apps/gateway/src/profile.ts";
 import { buildAppend } from "../apps/gateway/src/docedit.ts";
-import { issueConfirm, checkConfirm } from "../apps/gateway/src/security.ts";
+import { issueConfirm, checkConfirm, canonical } from "../apps/gateway/src/security.ts";
 
 // math safety
 for (const bad of ["\\input{/etc/passwd}", "\\write18{ls}", "\\immediate\\write18{x}", "\\csname x\\endcsname", "x^{2", "x}", "\\def\\a{b}", "\\usepackage{x}", "\\catcode`\\^^M=12", "\\@namedef{a}{b}", "\\pdfshellescape", "\\directlua{os.execute()}", "\\begin{document}", "a $ b", "\\verb|x|", "\\href{http://x}{y}"])
@@ -40,3 +40,13 @@ assert.deepEqual([rq[2].min, rq[2].max], [800, 1000]);
 assert.equal(draftStats("Intro [Your Name] text").hasPlaceholders, true);
 assert.equal(draftStats("As shown (Elmasri, 2016) and [2].").hasInTextCitations, true);
 console.log("requirement tests passed");
+
+assert.equal(canonical({ b: 1, a: { d: [1, { y: 2, x: undefined }], c: "z" } }), canonical({ a: { c: "z", d: [1, { y: 2 }] }, b: 1 }));
+import { DocSpec } from "@classroompilot/shared";
+import { toLatex } from "../apps/gateway/src/latex.ts";
+const cite = toLatex(DocSpec.parse({ meta: { title: "T", citationStyle: "ieee" }, blocks: [{ type: "paragraph", text: "A [@missing] B [@b] C [@a]." }], bibliography: [{ key: "a", title: "A" }, { key: "b", title: "B" }] }));
+assert.match(cite.tex, /B \[1\] C \[2\]/, "numbering must skip keys absent from the bibliography");
+assert.ok(cite.lint.some((l) => /missing/.test(l.message)));
+const empty = buildAppend([{ type: "list", ordered: false, items: [] }], 5);
+assert.equal(empty.requests.length, 0);
+console.log("hardening tests passed");

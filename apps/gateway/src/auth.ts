@@ -126,7 +126,7 @@ app.get("/authorize", async (c) => {
       `<h1>Connect ClassroomPilot</h1>
 <p><strong>${esc(d.clientName)}</strong>${d.clientDomain ? ` (${esc(d.clientDomain)})` : ""} wants to use ClassroomPilot on your behalf.</p>
 <p>Tokens will be sent to <strong>${esc(d.redirectHost)}</strong>.${d.redirectIsLoopback ? " <em>This is an app on your own computer.</em>" : ""}</p>
-<p>Next you will sign in with Google and grant <strong>read-only</strong> access to your Classroom courses, classwork, materials, announcements and your own submissions. ClassroomPilot cannot send, delete or share anything.</p>
+<p>Next you will sign in with Google and let ClassroomPilot <strong>read</strong> your Classroom courses, classwork, materials, announcements and your own submissions, and the Google Docs, Slides and Sheets attached to them. Only when you approve a preview in your assistant can it edit your own submission Doc, and it can create new files (documents it makes for you) in your Drive. It never changes Classroom itself, and it cannot delete or share anything or turn work in for you.</p>
 <form method="post" action="/authorize"><input type="hidden" name="handle" value="${esc(t.handle)}">
 <button class="primary" name="decision" value="approve">Continue with Google</button>
 <button name="decision" value="deny">Cancel</button></form>`,

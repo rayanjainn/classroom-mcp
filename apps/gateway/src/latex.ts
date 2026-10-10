@@ -406,7 +406,8 @@ export function lintSpec(spec: DocSpecT): LintItem[] {
 export function toLatex(spec: DocSpecT): LatexResult {
   const lint = lintSpec(spec);
   const cited = citedKeys(allText(spec));
-  const ctx: Ctx = { spec, lint, bibMap: new Map(spec.bibliography.map((b) => [b.key, b])), order: cited };
+  const bibMap = new Map(spec.bibliography.map((b) => [b.key, b]));
+  const ctx: Ctx = { spec, lint, bibMap, order: cited.filter((k) => bibMap.has(k)) };
   const m = spec.meta;
   const unicode = needsUnicodeEngine(spec);
   const engine: LatexResult["engine"] = unicode ? "xelatex" : "pdflatex";
