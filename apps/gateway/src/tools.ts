@@ -175,6 +175,14 @@ export function registerTools(server: McpServer, env: Env, props: Props) {
       const sub = subs[0];
       const studentFiles = (sub?.assignmentSubmission?.attachments ?? []).map(cr.summarizeMaterial);
       const title: string = (w.title ?? "").toLowerCase();
+      const firstCopy = studentFiles.find((f: any) => f.kind === "driveFile" && f.id);
+      let studentCopyContent: unknown = undefined;
+      if (firstCopy) {
+        const r = await readGoogleFile(t, firstCopy.id);
+        studentCopyContent = r.ok
+          ? { type: r.type, title: r.title, truncated: r.truncated, text: wrap(`drive:${firstCopy.id}`, r.text.slice(0, 8000)) }
+          : { unreadable: r.reason };
+      }
       const mentions = announcements.filter((a) => title && (a.text ?? "").toLowerCase().includes(title));
       const attachments = (w.materials ?? []).map(cr.summarizeMaterial);
       const templateStatus = studentFiles.some((f: any) => f.kind === "driveFile")
@@ -206,6 +214,7 @@ export function registerTools(server: McpServer, env: Env, props: Props) {
           link: sub.alternateLink,
         },
         templateStatus,
+        studentCopyContent,
         announcementsMentioningThis: mentions.map((a) => ({
           id: a.id,
           updated: a.updateTime,
@@ -213,7 +222,8 @@ export function registerTools(server: McpServer, env: Env, props: Props) {
         })),
         partialErrors: errors,
         caveats: [
-          "Use read_attachment with an attachment id to read Google Docs/Slides/Sheets.",
+          "studentCopyContent is the student's own copy of the template (what to fill in). The teacher's master file is usually not shared with students, so a 403 on it is expected: use the student copy instead.",
+          "Use read_attachment with an attachment id to read other Google Docs/Slides/Sheets.",
           "Classroom does not let this app attach files or turn in on teacher-created work; the student presses Turn In.",
         ],
       };
