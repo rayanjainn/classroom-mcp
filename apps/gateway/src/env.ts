@@ -13,4 +13,5 @@ export interface Props extends Record<string, unknown> {
   userId: string;
   email: string;
   googleRefreshToken: string;
+  scopeVersion: number;
 }

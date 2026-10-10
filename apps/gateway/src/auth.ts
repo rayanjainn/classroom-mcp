@@ -1,7 +1,7 @@
 import { AuthorizationError, CimdFetchError } from "@cloudflare/workers-oauth-provider";
 import { Hono } from "hono";
 import type { Env, Props } from "./env.js";
-import { exchangeCode, googleAuthUrl, s256, userInfo } from "./google.js";
+import { exchangeCode, googleAuthUrl, s256, SCOPE_VERSION, userInfo } from "./google.js";
 
 const esc = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -86,7 +86,7 @@ app.get("/callback", async (c) => {
       );
     }
     const me = await userInfo(tokens.access_token);
-    const props: Props = { userId: me.sub, email: me.email, googleRefreshToken: tokens.refresh_token };
+    const props: Props = { userId: me.sub, email: me.email, googleRefreshToken: tokens.refresh_token, scopeVersion: SCOPE_VERSION };
     const { redirectTo } = await oauth.completeAuthorization({
       request: original,
       userId: me.sub,

@@ -1,5 +1,8 @@
 import type { Env } from "./env.js";
 
+/** Bump when GOOGLE_SCOPES changes; older grants are forced to sign in again. */
+export const SCOPE_VERSION = 2;
+
 export const GOOGLE_SCOPES = [
   "openid",
   "email",

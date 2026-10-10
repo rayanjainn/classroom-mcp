@@ -1,8 +1,9 @@
-import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
+import { OAuthError, OAuthProvider } from "@cloudflare/workers-oauth-provider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import authApp from "./auth.js";
 import type { Env, Props } from "./env.js";
+import { SCOPE_VERSION } from "./google.js";
 import { registerTools } from "./tools.js";
 
 const mcpHandler = {
@@ -26,6 +27,12 @@ export default new OAuthProvider<Env>({
   tokenEndpoint: "/token",
   clientRegistrationEndpoint: "/register",
   clientIdMetadataDocumentEnabled: true,
+  tokenExchangeCallback: (o) => {
+    // Grants made before the Google scopes changed must sign in again.
+    if (o.grantType === "refresh_token" && (o.props?.scopeVersion ?? 0) < SCOPE_VERSION) {
+      throw new OAuthError("invalid_grant", { description: "ClassroomPilot permissions changed; please reconnect." });
+    }
+  },
   scopesSupported: ["mcp"],
   requiredScopes: ["mcp"],
   resourceMetadata: {
