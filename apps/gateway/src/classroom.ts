@@ -74,8 +74,9 @@ export async function getRubrics(token: string, courseId: string, courseWorkId: 
 /** Reduce a Classroom `Material` to something compact and uniform. */
 export function summarizeMaterial(m: any) {
   if (m.driveFile) {
-    const f = m.driveFile.driveFile;
-    return { kind: "driveFile", id: f.id, title: f.title, url: f.alternateLink, shareMode: m.driveFile.shareMode };
+    // Teacher materials nest the file (SharedDriveFile); student submission attachments do not.
+    const f = m.driveFile.driveFile ?? m.driveFile;
+    return { kind: "driveFile", id: f?.id, title: f?.title, url: f?.alternateLink, shareMode: m.driveFile.shareMode };
   }
   if (m.youTubeVideo) return { kind: "youtube", id: m.youTubeVideo.id, title: m.youTubeVideo.title, url: m.youTubeVideo.alternateLink };
   if (m.link) return { kind: "link", title: m.link.title, url: m.link.url };
