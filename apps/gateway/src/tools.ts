@@ -16,13 +16,17 @@ const fail = (message: string) => ({ isError: true, content: [{ type: "text" as 
 
 function explain(e: unknown) {
   if (e instanceof GoogleError) {
-    if (e.status === 401) return fail("Google access expired or was revoked. Ask the student to reconnect ClassroomPilot.");
+    const detail = ` [${e.describe()}]`;
+    if (e.reason === "SERVICE_DISABLED")
+      return fail("A required Google API is not enabled for this app's Google Cloud project (operator must enable it)." + detail);
+    if (e.status === 401) return fail("Google access expired or was revoked. Ask the student to disconnect and reconnect ClassroomPilot." + detail);
     if (e.status === 403)
       return fail(
-        "Google denied access (403). Either a required scope was not granted or the school's admin blocks this app; the student can ask IT to allowlist it.",
+        "Google denied access (403). Likely causes: a needed scope was not granted (disconnect and reconnect to grant new scopes), the file is not shared with the student, or the school's admin blocks this app." + detail,
       );
-    if (e.status === 404) return fail("Not found, or the student has no access to it.");
-    if (e.status === 429) return fail("Google rate limit reached. Try again in a minute.");
+    if (e.status === 404) return fail("Not found, or the student has no access to it." + detail);
+    if (e.status === 429) return fail("Google rate limit reached. Try again in a minute." + detail);
+    return fail("Google returned an error." + detail);
   }
   return fail(`Unexpected error: ${e instanceof Error ? e.message : String(e)}`);
 }
@@ -152,12 +156,21 @@ export function registerTools(server: McpServer, env: Env, props: Props) {
       inputSchema: { courseId: z.string(), assignmentId: z.string() },
     },
     runWith<{ courseId: string; assignmentId: string }>(async (t, { courseId, assignmentId }) => {
-      const [w, subs, rubrics, announcements, topics] = await Promise.all([
-        cr.getCourseWork(t, courseId, assignmentId),
-        cr.listMySubmissions(t, courseId, assignmentId),
-        cr.getRubrics(t, courseId, assignmentId).catch(() => []),
-        cr.listAnnouncements(t, courseId, 30),
-        cr.listTopics(t, courseId),
+      const errors: string[] = [];
+      const part = async <T,>(name: string, p: Promise<T>, fallback: T): Promise<T> => {
+        try {
+          return await p;
+        } catch (e) {
+          errors.push(`${name}: ${e instanceof GoogleError ? e.describe() : String(e)}`);
+          return fallback;
+        }
+      };
+      const w = await cr.getCourseWork(t, courseId, assignmentId);
+      const [subs, rubrics, announcements, topics] = await Promise.all([
+        part("submission", cr.listMySubmissions(t, courseId, assignmentId), [] as any[]),
+        part("rubric", cr.getRubrics(t, courseId, assignmentId), [] as any[]),
+        part("announcements", cr.listAnnouncements(t, courseId, 30), [] as any[]),
+        part("topics", cr.listTopics(t, courseId), [] as any[]),
       ]);
       const sub = subs[0];
       const studentFiles = (sub?.assignmentSubmission?.attachments ?? []).map(cr.summarizeMaterial);
@@ -198,8 +211,9 @@ export function registerTools(server: McpServer, env: Env, props: Props) {
           updated: a.updateTime,
           text: wrap(`classroom:announcement:${a.id}`, a.text),
         })),
+        partialErrors: errors,
         caveats: [
-          "Attachment contents are not read yet (Phase 2); only metadata is shown.",
+          "Use read_attachment with an attachment id to read Google Docs/Slides/Sheets.",
           "Classroom does not let this app attach files or turn in on teacher-created work; the student presses Turn In.",
         ],
       };

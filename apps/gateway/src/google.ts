@@ -57,7 +57,7 @@ async function tokenRequest(env: Env, params: Record<string, string>): Promise<T
       ...params,
     }),
   });
-  if (!res.ok) throw new GoogleError(res.status, await res.text());
+  if (!res.ok) throw new GoogleError(res.status, await res.text(), "https://oauth2.googleapis.com/token");
   return res.json();
 }
 
@@ -88,11 +88,28 @@ export async function userInfo(token: string): Promise<{ sub: string; email: str
 }
 
 export class GoogleError extends Error {
+  /** Google's own error status, e.g. PERMISSION_DENIED */
+  gstatus?: string;
+  /** Google's error reason, e.g. SERVICE_DISABLED, ACCESS_TOKEN_SCOPE_INSUFFICIENT */
+  reason?: string;
+  gmessage?: string;
   constructor(
     public status: number,
     public body: string,
+    public url = "",
   ) {
     super(`Google API ${status}: ${body.slice(0, 300)}`);
+    try {
+      const e = JSON.parse(body).error;
+      this.gstatus = e?.status;
+      this.gmessage = e?.message;
+      this.reason = e?.details?.find((d: any) => d.reason)?.reason ?? e?.errors?.[0]?.reason;
+    } catch {}
+  }
+  /** One-line diagnostic safe to show the user. */
+  describe() {
+    const where = this.url ? new URL(this.url).pathname.split("/").slice(0, 4).join("/") : "";
+    return `${this.status} ${this.gstatus ?? ""} ${this.reason ?? ""} ${where}: ${(this.gmessage ?? this.body).slice(0, 240)}`.replace(/\s+/g, " ");
   }
 }
 
@@ -101,6 +118,6 @@ export async function gget<T>(token: string, url: string, params: Record<string,
   const u = new URL(url);
   for (const [k, v] of Object.entries(params)) if (v !== undefined) u.searchParams.set(k, String(v));
   const res = await fetch(u, { headers: { authorization: `Bearer ${token}` } });
-  if (!res.ok) throw new GoogleError(res.status, await res.text());
+  if (!res.ok) throw new GoogleError(res.status, await res.text(), u.toString());
   return res.json();
 }
