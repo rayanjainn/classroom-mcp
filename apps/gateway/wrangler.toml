@@ -1,6 +1,7 @@
 name = "classroompilot-gateway"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"
+compatibility_flags = ["global_fetch_strictly_public"]
 
 # Uncomment after the zone is on Cloudflare and `wrangler d1 create classroompilot` is run.
 # routes = [{ pattern = "mcp.classroom.raycode.tech", custom_domain = true }]
@@ -10,6 +11,10 @@ compatibility_date = "2026-10-01"
 # database_name = "classroompilot"
 # database_id = "<fill after d1 create>"
 # migrations_dir = "migrations"
+
+[[kv_namespaces]]
+binding = "OAUTH_KV"
+id = "<fill after kv create>"
 
 [vars]
 PUBLIC_BASE_URL = "https://mcp.classroom.raycode.tech"
