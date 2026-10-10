@@ -1,0 +1,9 @@
+{
+  "name": "@classroompilot/shared",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": { "typecheck": "tsc -p ." },
+  "dependencies": { "zod": "^4.0.0" }
+}
