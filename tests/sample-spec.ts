@@ -1,0 +1,26 @@
+export const sample: any = {
+  meta: { title: "DBMS Lab 3: Query Performance", subtitle: "Unit 3 Lab Report", template: "lab-report", format: "latex", citationStyle: "ieee", header: "DBMS Lab", fontSize: 11, font: "computer-modern", paper: "A4", marginCm: 2.5, lineSpacing: 1.15, columns: 1, pageNumbers: true, colorMode: "color", useProfile: true },
+  blocks: [
+    { type: "cover", fields: { institution: "Example Institute of Technology", department: "Department of CSE", subject: "Database Management Systems", subjectCode: "CS301", fullName: "Rayan Jain", rollNo: "21CS001", branch: "CSE", batch: "B3", semester: "5", teacherName: "Dr. A & B", date: "10 Oct 2026" } },
+    { type: "toc" },
+    { type: "heading", level: 1, text: "Aim" },
+    { type: "paragraph", text: "To measure query time with **indexes** and *without*, using `EXPLAIN`. Cost is 5% of $100 budget & _more_ [@elmasri]. Variance $\\sigma^2 = \\frac{1}{N}\\sum x_i^2$ holds [@elmasri; @date]." },
+    { type: "heading", level: 1, text: "Theory" },
+    { type: "equation", latex: "\\sigma = \\sqrt{\\frac{1}{N}\\sum_{i=1}^{N}(x_i-\\mu)^2}", label: "eq:std" },
+    { type: "list", ordered: false, items: ["B-tree index", "Hash index with `#` and 50%"] },
+    { type: "heading", level: 1, text: "Results" },
+    { type: "table", caption: "Query timings", columns: ["Query", "Rows", "ms", "Notes"], rows: [["Q1", "1200", "4.2", "Index scan on a very long column description that should wrap nicely"], ["Q2", "88", "0.9", "ok"]], align: ["l", "r", "r", "l"] },
+    { type: "chart", chartType: "bar", title: "Time per query", caption: "Execution time", alt: "bar chart", xLabel: "Query", yLabel: "ms", categories: ["Q1", "Q2", "Q3"], series: [{ name: "indexed", y: [4.2, 0.9, 2.2] }, { name: "no index", y: [9.5, 3.1, 7.7] }] },
+    { type: "chart", chartType: "line", caption: "Scaling", alt: "line chart", xLabel: "rows", yLabel: "ms", series: [{ name: "t", x: [1, 2, 3, 4], y: [1, 4, 9, 16] }] },
+    { type: "diagram", caption: "Query flow", alt: "flowchart", direction: "LR", nodes: [{ id: "A", label: "Parse" }, { id: "B", label: "Optimise" }, { id: "C", label: "Index?", shape: "diamond" }, { id: "D", label: "Execute", shape: "round" }], edges: [{ from: "A", to: "B" }, { from: "B", to: "C" }, { from: "C", to: "D", label: "yes" }, { from: "C", to: "B", label: "retry" }] },
+    { type: "code", language: "sql", caption: "Query 3", text: "SELECT * FROM t WHERE a < 5; -- end\\end{lstlisting}" },
+    { type: "algorithm", caption: "Index build", steps: ["Sort keys", "Build nodes"] },
+    { type: "quote", text: "Indexes are not free." },
+    { type: "heading", level: 1, text: "Conclusion" },
+    { type: "paragraph", text: "Indexes helped by about 2x – “nice” → arrows." },
+  ],
+  bibliography: [
+    { key: "elmasri", type: "book", author: "Elmasri, R.; Navathe, S.", title: "Fundamentals of Database Systems", year: 2016, publisher: "Pearson" },
+    { key: "date", type: "book", author: "Date, C.J.", title: "An Introduction to Database Systems", year: 2004, publisher: "Addison-Wesley" },
+  ],
+};

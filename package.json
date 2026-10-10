@@ -2,13 +2,17 @@
   "name": "classroompilot",
   "private": true,
   "type": "module",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "npm run dev -w @classroompilot/gateway",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "deploy": "npm run deploy -w @classroompilot/gateway"
   },
   "devDependencies": {
+    "tsx": "^4.23.15",
     "typescript": "^5.6.0"
   }
 }
