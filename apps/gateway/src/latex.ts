@@ -33,11 +33,16 @@ const SPECIAL: Record<string, string> = {
 
 export const esc = (s: string) => s.replace(/[\\&%$#_{}~^<>|]/g, (c) => SPECIAL[c]).replace(/\u000b/g, "\\\\").replace(/\u00a0/g, "~");
 
-const FORBIDDEN = /\\(input|include|includeonly|write|openout|openin|read|immediate|def|edef|gdef|xdef|let|catcode|csname|expandafter|usepackage|RequirePackage|documentclass|newcommand|renewcommand|providecommand|href|url|special|pdfprimitive|directlua|ShellEscape|jobname|detokenize|scantokens|endinput|verbatiminput|lstinputlisting|includegraphics|begin\s*\{\s*(document|verbatim|lstlisting|filecontents))\b/i;
+const FORBIDDEN_CMDS =
+  "input|include|includeonly|import|subimport|write|newwrite|openout|closeout|openin|newread|read|readline|immediate|def|edef|gdef|xdef|let|futurelet|catcode|csname|endcsname|expandafter|noexpand|usepackage|RequirePackage|documentclass|newcommand|renewcommand|providecommand|DeclareRobustCommand|href|url|special|jobname|detokenize|scantokens|endinput|verbatiminput|lstinputlisting|includegraphics|includepdf|ShellEscape|makeatletter|makeatother|begin|end|verb|string|uppercase|lowercase|pdf[A-Za-z]*|lua[A-Za-z]*|directlua|latelua|tikz[A-Za-z]*|pgf[A-Za-z]*|foreach";
+// A control word is forbidden when followed by a non-letter (so \write18 is caught but \writer is not), or when it contains @, or ^^ notation is used.
+const FORBIDDEN = new RegExp(`\\\\(?:(?:${FORBIDDEN_CMDS})(?![A-Za-z])|[A-Za-z]*@)|\\^\\^`, "i");
 
 /** True when a LaTeX math fragment is safe to emit. */
+const MATH_ENVS = /\\(?:begin|end)\{(?:pmatrix|bmatrix|vmatrix|Vmatrix|matrix|smallmatrix|cases|aligned|array|split|gathered)\}/g;
+
 export function safeMath(src: string): boolean {
-  if (FORBIDDEN.test(src)) return false;
+  if (FORBIDDEN.test(src.replace(MATH_ENVS, ""))) return false;
   let depth = 0;
   for (let i = 0; i < src.length; i++) {
     const c = src[i];
