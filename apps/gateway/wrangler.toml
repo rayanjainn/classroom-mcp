@@ -19,3 +19,6 @@ binding = "OAUTH_KV"
 PUBLIC_BASE_URL = "https://mcp.classroom.raycode.tech"
 
 # Secrets (set with `wrangler secret put`): GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, TOKEN_ENC_KEY
+
+[observability]
+enabled = true
