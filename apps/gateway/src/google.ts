@@ -1,7 +1,7 @@
 import type { Env } from "./env.js";
 
 /** Bump when GOOGLE_SCOPES changes; older grants are forced to sign in again. */
-export const SCOPE_VERSION = 2;
+export const SCOPE_VERSION = 3;
 
 export const GOOGLE_SCOPES = [
   "openid",
@@ -13,7 +13,7 @@ export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/classroom.courseworkmaterials.readonly",
   "https://www.googleapis.com/auth/classroom.announcements.readonly",
   "https://www.googleapis.com/auth/classroom.topics.readonly",
-  "https://www.googleapis.com/auth/documents.readonly",
+  "https://www.googleapis.com/auth/documents",
   "https://www.googleapis.com/auth/presentations.readonly",
   "https://www.googleapis.com/auth/spreadsheets.readonly",
 ];
@@ -122,5 +122,16 @@ export async function gget<T>(token: string, url: string, params: Record<string,
   for (const [k, v] of Object.entries(params)) if (v !== undefined) u.searchParams.set(k, String(v));
   const res = await fetch(u, { headers: { authorization: `Bearer ${token}` } });
   if (!res.ok) throw new GoogleError(res.status, await res.text(), u.toString());
+  return res.json();
+}
+
+/** POST JSON to a Google API URL. */
+export async function gpost<T>(token: string, url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new GoogleError(res.status, await res.text(), url);
   return res.json();
 }
