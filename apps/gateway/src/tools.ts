@@ -5,6 +5,9 @@ import { accessToken, GoogleError, gget, gpost } from "./google.js";
 import * as cr from "./classroom.js";
 import { readGoogleFile } from "./files.js";
 import { appendPoint, buildAppend, EditBlock, findText } from "./docedit.js";
+import {
+  CourseSettingsSchema, deleteAll, getCourseSettings, getProfile, ProfileSchema, scanPlaceholders, updateCourseSettings, updateProfile,
+} from "./profile.js";
 import { checkConfirm, issueConfirm, sha256 } from "./security.js";
 
 const UNTRUSTED_NOTE =
@@ -410,6 +413,112 @@ export function registerTools(server: McpServer, env: Env, props: Props) {
         blocksAppended: a.appendBlocks?.length ?? 0,
         tablesFilled,
         note: "Review the Doc (File > Version history can undo). The student must press Turn In in Classroom.",
+      };
+    }),
+  );
+
+  server.registerTool(
+    "get_profile",
+    {
+      description:
+        "Get the student's saved details (name, roll no, UID, branch, batch, etc.) used to fill cover pages and headers. If fields needed for the task are missing, ask the student once, then save them with update_profile. Pass courseId to also get that course's saved settings (subject code, teacher, template notes).",
+      inputSchema: { courseId: z.string().optional() },
+    },
+    runWith<{ courseId?: string }>(async (_t, a) => ({
+      profile: await getProfile(env, props.userId),
+      courseSettings: a.courseId ? await getCourseSettings(env, props.userId, a.courseId) : undefined,
+      googleEmail: props.email,
+    })),
+  );
+
+  server.registerTool(
+    "update_profile",
+    {
+      description:
+        "Save or change the student's details and/or per-course settings. Only send fields the student actually told you. Send an empty string to clear a field. courseSettings are reusable per course (e.g. structureNotes describing the lab-report layout the teacher wants).",
+      inputSchema: {
+        profile: ProfileSchema.optional(),
+        courseId: z.string().optional(),
+        courseSettings: CourseSettingsSchema.optional(),
+      },
+    },
+    runWith<any>(async (_t, a) => {
+      if (a.courseSettings && !a.courseId) return { error: "courseId is required with courseSettings" };
+      return {
+        profile: a.profile ? await updateProfile(env, props.userId, a.profile) : undefined,
+        courseSettings: a.courseSettings ? await updateCourseSettings(env, props.userId, a.courseId, a.courseSettings) : undefined,
+      };
+    }),
+  );
+
+  server.registerTool(
+    "delete_my_data",
+    {
+      description: "Delete the student's saved profile and per-course settings. Only call when the student explicitly asks.",
+      inputSchema: {},
+    },
+    runWith<any>(async () => ({ deletedRecords: await deleteAll(env, props.userId) })),
+  );
+
+  server.registerTool(
+    "map_profile_to_template",
+    {
+      description:
+        "Scan the student's own template copy (a Google Doc) for fill-in spots like [Your Name], {{rollNo}} or 'Roll No: ____' and match them to the saved profile. Returns ready-made `replacements` for edit_student_doc, plus `missing` fields to ask the student about. Call before filling a cover page.",
+      inputSchema: { fileId: z.string() },
+    },
+    runWith<{ fileId: string }>(async (t, { fileId }) => {
+      const doc = await gget<any>(t, `https://docs.googleapis.com/v1/documents/${fileId}`);
+      const paras: string[] = [];
+      const walk = (content: any[] = []) => {
+        for (const el of content) {
+          if (el.paragraph) paras.push((el.paragraph.elements ?? []).map((e: any) => e.textRun?.content ?? "").join("").replace(/\n$/, ""));
+          for (const row of el.table?.tableRows ?? []) for (const c of row.tableCells ?? []) walk(c.content);
+        }
+      };
+      walk(doc.body?.content);
+      const profile = (await getProfile(env, props.userId)) as Record<string, string | undefined>;
+      const found = scanPlaceholders(paras);
+      const replacements: { find: string; replace: string }[] = [];
+      const missing: string[] = [];
+      const unknown: string[] = [];
+      for (const p of found) {
+        if (!p.field) unknown.push(p.find);
+        else if (profile[p.field]) {
+          const label = p.find.startsWith("[") || p.find.startsWith("{{") ? undefined : p.find.replace(/[_.]+\s*$/, "").replace(/\s+$/, "");
+          replacements.push({ find: p.find, replace: label ? `${label} ${profile[p.field]}` : profile[p.field]! });
+        } else missing.push(p.field);
+      }
+      return {
+        document: doc.title,
+        placeholdersFound: found,
+        replacements,
+        missing: [...new Set(missing)],
+        unmatched: unknown,
+        next: "Ask the student for any missing fields, save with update_profile, then pass replacements to edit_student_doc (preview first).",
+      };
+    }),
+  );
+
+  server.registerTool(
+    "verify_turned_in",
+    {
+      description: "After the student says they pressed Turn In, check Classroom to confirm the submission is actually TURNED_IN (and whether it is late or graded).",
+      inputSchema: { courseId: z.string(), assignmentId: z.string() },
+    },
+    runWith<{ courseId: string; assignmentId: string }>(async (t, { courseId, assignmentId }) => {
+      const s = (await cr.listMySubmissions(t, courseId, assignmentId))[0];
+      if (!s) return { error: "No submission found" };
+      const turnedIn = s.state === "TURNED_IN" || s.state === "RETURNED";
+      return {
+        turnedIn,
+        state: s.state,
+        late: s.late ?? false,
+        grade: s.assignedGrade,
+        message: turnedIn
+          ? "Confirmed: Classroom shows this as turned in."
+          : "Not turned in yet. The student must open the assignment in Classroom and click Turn in (this app cannot do it for teacher-created work).",
+        link: s.alternateLink,
       };
     }),
   );
