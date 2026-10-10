@@ -51,7 +51,14 @@ const range = (startIndex: number, endIndex: number) => ({ startIndex, endIndex 
  * Build Docs batchUpdate requests that append blocks at `start` (the index of the document's
  * final, empty paragraph). Tables are emitted as placeholder paragraphs and filled in later passes.
  */
-export function buildAppend(blocks: EditBlockT[], start: number, leadingBreak = false) {
+export interface AppendStyle {
+  font?: string;
+  sizePt?: number;
+  /** Line spacing as a percentage; 100 = single. */
+  lineSpacingPct?: number;
+}
+
+export function buildAppend(blocks: EditBlockT[], start: number, leadingBreak = false, style: AppendStyle = {}) {
   const requests: any[] = [];
   const jobs: PostJob[] = [];
   let idx = start;
@@ -64,21 +71,22 @@ export function buildAppend(blocks: EditBlockT[], start: number, leadingBreak = 
   const para = (runs: Run[], named: string, extra?: (s: number, e: number) => void) => {
     const text = runs.map((r) => r.text).join("");
     requests.push({ insertText: { location: { index: idx }, text: text + "\n" } });
+    const body = named === "NORMAL_TEXT";
     requests.push({
       updateParagraphStyle: {
         range: range(idx, idx + text.length + 1),
-        paragraphStyle: { namedStyleType: named },
-        fields: "namedStyleType",
+        paragraphStyle: { namedStyleType: named, ...(body && style.lineSpacingPct ? { lineSpacing: style.lineSpacingPct } : {}) },
+        fields: body && style.lineSpacingPct ? "namedStyleType,lineSpacing" : "namedStyleType",
       },
     });
     // Inserted text inherits neighbouring character style; reset it, then apply runs.
-    requests.push({
-      updateTextStyle: {
-        range: range(idx, idx + text.length),
-        textStyle: { bold: false, italic: false },
-        fields: "bold,italic",
-      },
-    });
+    if (text.length) {
+      const reset: any = { bold: false, italic: false };
+      const fields = ["bold", "italic"];
+      if (style.font) (reset.weightedFontFamily = { fontFamily: style.font }), fields.push("weightedFontFamily");
+      if (style.sizePt && body) (reset.fontSize = { magnitude: style.sizePt, unit: "PT" }), fields.push("fontSize");
+      requests.push({ updateTextStyle: { range: range(idx, idx + text.length), textStyle: reset, fields: fields.join(",") } });
+    }
     let off = idx;
     for (const r of runs) {
       if (r.text && (r.bold || r.italic || r.code)) {

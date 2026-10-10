@@ -4,12 +4,14 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import authApp from "./auth.js";
 import type { Env, Props } from "./env.js";
 import { SCOPE_VERSION } from "./google.js";
+import { registerRenderTools } from "./tools-render.js";
 import { registerTools } from "./tools.js";
 
 const mcpHandler = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext & { props: Props }) {
     const server = new McpServer({ name: "classroompilot", version: "0.0.1" });
     registerTools(server, env, ctx.props);
+    registerRenderTools(server, env, ctx.props);
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,

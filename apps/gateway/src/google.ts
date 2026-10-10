@@ -1,7 +1,7 @@
 import type { Env } from "./env.js";
 
 /** Bump when GOOGLE_SCOPES changes; older grants are forced to sign in again. */
-export const SCOPE_VERSION = 3;
+export const SCOPE_VERSION = 4;
 
 export const GOOGLE_SCOPES = [
   "openid",
@@ -16,6 +16,7 @@ export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/documents",
   "https://www.googleapis.com/auth/presentations.readonly",
   "https://www.googleapis.com/auth/spreadsheets.readonly",
+  "https://www.googleapis.com/auth/drive.file",
 ];
 
 export function googleAuthUrl(env: Env, state: string, codeChallenge: string): string {
@@ -129,6 +130,16 @@ export async function gget<T>(token: string, url: string, params: Record<string,
 export async function gpost<T>(token: string, url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
     method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new GoogleError(res.status, await res.text(), url);
+  return res.json();
+}
+
+export async function gpatch<T>(token: string, url: string, body: unknown = {}): Promise<T> {
+  const res = await fetch(url, {
+    method: "PATCH",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify(body),
   });

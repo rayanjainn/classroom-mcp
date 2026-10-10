@@ -23,6 +23,45 @@ const app = new Hono<{ Bindings: Env }>();
 app.get("/", (c) => c.text("ClassroomPilot gateway"));
 app.get("/healthz", (c) => c.json({ ok: true }));
 
+const SAFE_ID = /^[a-f0-9]{32}$/;
+const noStore = { "cache-control": "no-store", "x-robots-tag": "noindex", "referrer-policy": "no-referrer" };
+
+app.get("/open/:id", async (c) => {
+  const id = c.req.param("id");
+  const raw = SAFE_ID.test(id) ? await c.env.OAUTH_KV.get(`cp:tex:${id}`) : null;
+  if (!raw) return html("<h1>Link expired</h1><p>Ask your assistant to render the document again.</p>", new Headers(noStore), 404);
+  const { tex, engine, name } = JSON.parse(raw) as { tex: string; engine: string; name: string };
+  const h = new Headers(noStore);
+  h.set("content-security-policy", "default-src 'none'; style-src 'unsafe-inline'; form-action https://www.overleaf.com; frame-ancestors 'none'");
+  return html(
+    `<h1>${esc(name)}</h1>
+<p>Your document is ready as LaTeX (compiles with ${esc(engine)}). Open it in Overleaf to get the PDF, or download the <code>.tex</code> file.</p>
+<form method="post" action="https://www.overleaf.com/docs">
+<input type="hidden" name="encoded_snip" value="${esc(encodeURIComponent(tex))}">
+<input type="hidden" name="snip_name" value="${esc(name)}">
+<input type="hidden" name="engine" value="${esc(engine)}">
+<button class="primary" type="submit">Open in Overleaf</button>
+<a href="/open/${id}/download"><button type="button">Download .tex</button></a>
+</form>
+<p><small>This link works for one hour. Overleaf is a separate service with its own terms.</small></p>`,
+    h,
+  );
+});
+
+app.get("/open/:id/download", async (c) => {
+  const id = c.req.param("id");
+  const raw = SAFE_ID.test(id) ? await c.env.OAUTH_KV.get(`cp:tex:${id}`) : null;
+  if (!raw) return c.text("Expired", 404);
+  const { tex, name } = JSON.parse(raw) as { tex: string; name: string };
+  return new Response(tex, {
+    headers: {
+      ...noStore,
+      "content-type": "text/plain; charset=utf-8",
+      "content-disposition": `attachment; filename="${name.replace(/[^A-Za-z0-9._ -]/g, "_")}.tex"`,
+    },
+  });
+});
+
 app.get("/authorize", async (c) => {
   const oauth = c.env.OAUTH_PROVIDER;
   try {
