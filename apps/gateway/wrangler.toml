@@ -3,8 +3,7 @@ main = "src/index.ts"
 compatibility_date = "2026-10-01"
 compatibility_flags = ["global_fetch_strictly_public"]
 
-# Uncomment after the zone is on Cloudflare and `wrangler d1 create classroompilot` is run.
-# routes = [{ pattern = "mcp.classroom.raycode.tech", custom_domain = true }]
+routes = [{ pattern = "mcp.classroom.raycode.tech", custom_domain = true }]
 
 # [[d1_databases]]
 # binding = "DB"
@@ -14,7 +13,7 @@ compatibility_flags = ["global_fetch_strictly_public"]
 
 [[kv_namespaces]]
 binding = "OAUTH_KV"
-id = "<fill after kv create>"
+# No id: wrangler creates the namespace on first deploy.
 
 [vars]
 PUBLIC_BASE_URL = "https://mcp.classroom.raycode.tech"
