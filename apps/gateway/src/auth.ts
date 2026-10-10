@@ -104,16 +104,19 @@ app.post("/pick/:id/submit", async (c) => {
   const text = typeof body.text === "string" ? body.text : "";
   if (!text.trim() || text.length > 200_000) return json(400, { error: "text missing or too large" });
   if (typeof body.fileId !== "string" || !/^[A-Za-z0-9_-]{10,100}$/.test(body.fileId)) return json(400, { error: "bad fileId" });
-  if (s.expectFileId && s.expectFileId !== body.fileId) return json(400, { error: "wrong file" });
-  await putPicked(c.env, s.userId, {
-    fileId: body.fileId,
+  const record = {
     name: String(body.name ?? "").slice(0, 200),
     mime: String(body.mime ?? "").slice(0, 100),
     text,
     pages: typeof body.pages === "number" ? body.pages : undefined,
     truncated: Boolean(body.truncated),
-  });
-  return json(200, { ok: true });
+  };
+  await putPicked(c.env, s.userId, { ...record, fileId: body.fileId });
+  // The student chose this file for the attachment the assistant asked about; make it readable under that id too
+  // (for example when they pick their own copy of the teacher's file).
+  const aliased = Boolean(s.expectFileId && s.expectFileId !== body.fileId);
+  if (aliased) await putPicked(c.env, s.userId, { ...record, fileId: s.expectFileId! });
+  return json(200, { ok: true, aliased });
 });
 
 app.get("/authorize", async (c) => {

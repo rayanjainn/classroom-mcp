@@ -62,17 +62,28 @@
     });
   }
 
+  const TYPES = [
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "text/plain",
+    "text/markdown",
+    "application/vnd.google-apps.document",
+  ].join(",");
+
   async function pick(token) {
     await loadScript("https://apis.google.com/js/api.js");
     await new Promise((resolve) => gapi.load("picker", resolve));
     return new Promise((resolve) => {
-      const view = new google.picker.DocsView(google.picker.ViewId.DOCS).setIncludeFolders(false).setSelectFolderEnabled(false);
-      if (session.expectFileId) view.setFileIds(session.expectFileId);
+      const mine = new google.picker.DocsView(google.picker.ViewId.DOCS).setIncludeFolders(true).setMimeTypes(TYPES);
+      const shared = new google.picker.DocsView(google.picker.ViewId.DOCS).setOwnedByMe(false).setIncludeFolders(true).setMimeTypes(TYPES);
       new google.picker.PickerBuilder()
-        .addView(view)
+        .addView(mine)
+        .addView(shared)
         .setOAuthToken(token)
         .setDeveloperKey(session.apiKey)
         .setAppId(session.appId)
+        .setOrigin(location.protocol + "//" + location.host)
+        .setTitle(session.name ? "Choose: " + session.name : "Choose the file")
         .setCallback((d) => {
           if (d.action === google.picker.Action.PICKED) resolve(d.docs[0]);
           else if (d.action === google.picker.Action.CANCEL) resolve(null);
@@ -147,6 +158,7 @@
       });
       if (!r.ok) throw new Error("ClassroomPilot rejected the upload (" + r.status + "). The link may have expired.");
       say(`Done: "${doc.name}" is ready. Go back to your assistant and ask it to read the file again.`, "ok");
+      $("go").disabled = false;
     } catch (e) {
       $("go").disabled = false;
       say(e && e.message ? e.message : "Something went wrong.", "err");
