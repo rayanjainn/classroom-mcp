@@ -2,6 +2,15 @@
   "name": "@classroompilot/web",
   "version": "0.0.1",
   "private": true,
-  "scripts": { "deploy": "wrangler deploy" },
-  "devDependencies": { "wrangler": "^4.0.0" }
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "vendor": "cp ../../node_modules/pdfjs-dist/build/pdf.min.js ../../node_modules/pdfjs-dist/build/pdf.worker.min.js ../../node_modules/mammoth/mammoth.browser.min.js public/vendor/"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  },
+  "dependencies": {
+    "mammoth": "^1.13.0",
+    "pdfjs-dist": "^3.11.174"
+  }
 }

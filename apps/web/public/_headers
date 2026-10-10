@@ -1,0 +1,6 @@
+/pick/*
+  Content-Security-Policy: object-src 'none'; base-uri 'none'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

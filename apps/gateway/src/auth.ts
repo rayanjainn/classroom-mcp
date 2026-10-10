@@ -1,6 +1,7 @@
 import { AuthorizationError, CimdFetchError } from "@cloudflare/workers-oauth-provider";
 import { Hono } from "hono";
 import type { Env, Props } from "./env.js";
+import { getPickSession, putPicked } from "./context.js";
 import { exchangeCode, googleAuthUrl, s256, SCOPE_VERSION, userInfo } from "./google.js";
 
 const esc = (s: string) =>
@@ -60,6 +61,59 @@ app.get("/open/:id/download", async (c) => {
       "content-disposition": `attachment; filename="${name.replace(/[^A-Za-z0-9._ -]/g, "_")}.tex"`,
     },
   });
+});
+
+// ---- file picker support (the picker page itself lives on the static site) ----
+const cors = (c: { env: Env }) => ({
+  "access-control-allow-origin": c.env.WEB_ORIGIN,
+  "access-control-allow-methods": "GET, POST, OPTIONS",
+  "access-control-allow-headers": "content-type",
+  "access-control-max-age": "600",
+  vary: "origin",
+  "cache-control": "no-store",
+});
+
+app.options("/pick/:id/*", (c) => new Response(null, { status: 204, headers: cors(c) }));
+app.options("/pick/:id", (c) => new Response(null, { status: 204, headers: cors(c) }));
+
+app.get("/pick/:id", async (c) => {
+  const s = await getPickSession(c.env, c.req.param("id"));
+  if (!s) return new Response(JSON.stringify({ error: "expired" }), { status: 404, headers: { ...cors(c), "content-type": "application/json" } });
+  return new Response(
+    JSON.stringify({
+      expectFileId: s.expectFileId,
+      name: s.name,
+      clientId: c.env.GOOGLE_CLIENT_ID,
+      apiKey: c.env.PICKER_API_KEY || undefined,
+      appId: c.env.GCP_PROJECT_NUMBER || undefined,
+    }),
+    { headers: { ...cors(c), "content-type": "application/json" } },
+  );
+});
+
+app.post("/pick/:id/submit", async (c) => {
+  const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { ...cors(c), "content-type": "application/json" } });
+  const s = await getPickSession(c.env, c.req.param("id"));
+  if (!s) return json(404, { error: "expired" });
+  let body: any;
+  try {
+    body = await c.req.json();
+  } catch {
+    return json(400, { error: "bad json" });
+  }
+  const text = typeof body.text === "string" ? body.text : "";
+  if (!text.trim() || text.length > 200_000) return json(400, { error: "text missing or too large" });
+  if (typeof body.fileId !== "string" || !/^[A-Za-z0-9_-]{10,100}$/.test(body.fileId)) return json(400, { error: "bad fileId" });
+  if (s.expectFileId && s.expectFileId !== body.fileId) return json(400, { error: "wrong file" });
+  await putPicked(c.env, s.userId, {
+    fileId: body.fileId,
+    name: String(body.name ?? "").slice(0, 200),
+    mime: String(body.mime ?? "").slice(0, 100),
+    text,
+    pages: typeof body.pages === "number" ? body.pages : undefined,
+    truncated: Boolean(body.truncated),
+  });
+  return json(200, { ok: true });
 });
 
 app.get("/authorize", async (c) => {

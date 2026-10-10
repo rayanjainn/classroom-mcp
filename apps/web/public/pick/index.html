@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Share a file with ClassroomPilot</title>
+<style>
+:root{color-scheme:light dark}
+body{font:17px/1.6 system-ui,sans-serif;max-width:40rem;margin:0 auto;padding:2rem 1rem}
+button{font:inherit;padding:.7rem 1.4rem;border-radius:.4rem;border:1px solid #1a73e8;background:#1a73e8;color:#fff;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+#status{margin-top:1.2rem;padding:.8rem 1rem;border-radius:.4rem;background:rgba(128,128,128,.15)}
+#status.err{background:rgba(217,48,37,.15)}
+#status.ok{background:rgba(30,142,62,.18)}
+small{opacity:.8}
+</style>
+</head>
+<body>
+<h1>Share a file with ClassroomPilot</h1>
+<p>Your assistant needs to read <strong id="fname">a file</strong> from your Classroom. Google only lets an app open files you pick yourself, so choose it once here.</p>
+<p><small>The file is read in this browser tab. Only its extracted text is sent to ClassroomPilot and kept for 30 days. The file itself is never copied or changed.</small></p>
+<p><button id="go" disabled>Choose the file in Google Drive</button></p>
+<div id="status" role="status">Loading&hellip;</div>
+<script src="/pick/pick.js"></script>
+</body>
+</html>

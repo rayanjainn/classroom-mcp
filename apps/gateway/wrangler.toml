@@ -17,6 +17,10 @@ binding = "OAUTH_KV"
 
 [vars]
 PUBLIC_BASE_URL = "https://mcp.classroom.raycode.tech"
+WEB_ORIGIN = "https://classroom.raycode.tech"
+# File picker (PDF / Word reading). Fill these two to enable it; see docs/PICKER.md.
+PICKER_API_KEY = ""
+GCP_PROJECT_NUMBER = ""
 
 # Secrets (set with `wrangler secret put`): GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, TOKEN_ENC_KEY
 

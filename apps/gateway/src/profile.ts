@@ -39,13 +39,13 @@ async function key(env: Env) {
 const b64 = (u: Uint8Array) => btoa(String.fromCharCode(...u));
 const unb64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
-async function seal(env: Env, value: unknown) {
+export async function seal(env: Env, value: unknown) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await key(env), enc.encode(JSON.stringify(value))));
   return `${b64(iv)}.${b64(ct)}`;
 }
 
-async function open<T>(env: Env, sealed: string | null): Promise<T | null> {
+export async function open<T>(env: Env, sealed: string | null): Promise<T | null> {
   if (!sealed) return null;
   const [iv, ct] = sealed.split(".");
   const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(iv) }, await key(env), unb64(ct));
