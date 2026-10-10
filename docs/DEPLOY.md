@@ -30,3 +30,22 @@ Prereqs: Node 22+, `raycode.tech` on Cloudflare, a Google OAuth web client.
 Local dev: copy `.dev.vars.example` to `.dev.vars`, fill it, run `npm run dev` from the repo root.
 
 Not needed yet: the D1 database (`migrations/0001_init.sql`) is unused until Phase 2.
+
+## After pulling updates
+
+1. Follow `docs/GOOGLE_SETUP.md` (new APIs, scopes, JavaScript origin).
+2. `npx wrangler deploy` in `apps/gateway` **and** in `apps/web`.
+3. Reconnect the connector (scopes changed: the old sign-in is rejected automatically within an hour, or add the connector again).
+4. Optional: enable the file picker (`docs/PICKER.md`).
+
+## Smoke test (ask your AI assistant, using only ClassroomPilot)
+
+1. "List my assignments due this week." (`weekly_plan`)
+2. "Get the bundle for <assignment> and show the template content."
+3. "Save my profile: ..." then "Map my profile to the template."
+4. "Fill in the placeholders and add an Aim section; show me the preview first." then approve.
+5. "Render a lab report for this assignment as LaTeX." Open the Overleaf link.
+6. "Check my draft against the requirements." then "Prepare my submission."
+7. Open a teacher-attached PDF with "read_attachment" (needs the picker).
+
+Free-plan Workers allow 10 ms CPU per request. If a tool call fails with error 1102 or "exceeded CPU", note which tool and tell me; the fix is smaller pages or Workers Paid (about $5/month).
