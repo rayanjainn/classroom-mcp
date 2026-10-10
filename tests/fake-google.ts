@@ -50,7 +50,11 @@ class DocSim {
     if (req.deleteContentRange) {
       const r = req.deleteContentRange.range;
       this.check(r, "deleteContentRange");
+      const removed = this.text.slice(r.startIndex - 1, r.endIndex - 1);
+      const p = this.paraOf(r.startIndex - 1);
       this.text = this.text.slice(0, r.startIndex - 1) + this.text.slice(r.endIndex - 1);
+      const k = (removed.match(/\n/g) ?? []).length;
+      if (k) this.styles.splice(r.startIndex - 1 > 0 && this.text[r.startIndex - 2] !== "\n" && r.startIndex > 1 ? p + 1 : p, k);
       return {};
     }
     if (req.insertTable) { this.tables++; return {}; }
@@ -74,10 +78,10 @@ export function installFakeGoogle(opts: { kv?: FakeKV } = {}) {
   const folders = new Map<string, string>();
   let counter = 0;
 
-  const seedDoc = (id: string, title: string, text: string) => {
+  const seedDoc = (id: string, title: string, text: string, styles?: string[]) => {
     const d = new DocSim(title);
     d.text = text.endsWith("\n") ? text : text + "\n";
-    d.styles = d.text.split(/(?<=\n)/).map(() => "NORMAL_TEXT");
+    d.styles = d.text.split(/(?<=\n)/).map((_, i) => styles?.[i] ?? "NORMAL_TEXT");
     docs.set(id, d);
     return d;
   };

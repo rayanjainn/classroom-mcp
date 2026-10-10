@@ -12,6 +12,7 @@ import { sample } from "./sample-spec.ts";
 const kv = new FakeKV();
 const g = installFakeGoogle({ kv });
 g.seedDoc("STUDENT_DOC", "Rayan - Submission Doc", "MCP 101 Assignment 1\nName: ________\n[Roll Number]\n");
+g.seedDoc("DEL_DOC", "Report", "My Report\nAim\nAim text here.\nTheory\nTheory line one.\nTheory line two.\nSub\nSub text.\nConclusion\nDone.\n", ["TITLE", "HEADING_1", "NORMAL_TEXT", "HEADING_1", "NORMAL_TEXT", "NORMAL_TEXT", "HEADING_2", "NORMAL_TEXT", "HEADING_1", "NORMAL_TEXT"]);
 g.seedDoc("OTHER_DOC", "Someone else's doc", "secret\n");
 const env: any = { OAUTH_KV: kv, GOOGLE_CLIENT_SECRET: "test-secret", GOOGLE_CLIENT_ID: "cid", PUBLIC_BASE_URL: "https://mcp.test", WEB_ORIGIN: "https://web.test", PICKER_API_KEY: "k", GCP_PROJECT_NUMBER: "1" };
 const props: any = { userId: "u1", email: "s@example.com", googleRefreshToken: "rt", scopeVersion: 4 };
@@ -88,6 +89,38 @@ assert.match(doc.text, /\nAim\nHello bold\.\na\nb\n/, doc.text);
 assert.equal(doc.tables, 1); assert.equal(doc.pageBreaks, 1);
 assert.ok(!doc.text.includes("§§"), "placeholders cleaned up: " + JSON.stringify(doc.text));
 assert.equal(doc.styles[doc.text.split("\n").indexOf("Aim")], "HEADING_1");
+
+// deletions: preview shows what goes; apply removes exactly that
+const delArgs = { courseId: "C1", assignmentId: "W1", fileId: "STUDENT_DOC" };
+{
+  // make DEL_DOC the student's file for this check by temporarily pointing the fake submission at it
+  const realFetch2 = globalThis.fetch;
+  globalThis.fetch = (async (i: any, o: any) => {
+    const res = await realFetch2(i, o);
+    if (String(i).includes("/courseWork/W1/studentSubmissions")) { const j: any = await res.clone().json(); j.studentSubmissions[0].assignmentSubmission.attachments[0].driveFile.id = "DEL_DOC"; return new Response(JSON.stringify(j), { status: 200 }); }
+    return res;
+  }) as any;
+  const dargs = { ...delArgs, fileId: "DEL_DOC", deleteSections: [{ heading: "Theory" }, { heading: "Nope" }], deleteText: ["Done."] };
+  r = must(await call("edit_student_doc", dargs), "delete preview");
+  assert.equal(r.willDelete.ranges.length, 1); assert.match(r.willDelete.ranges[0].startsWith, /^Theory Theory line one\. Theory line two\. Sub Sub text\./);
+  assert.equal(r.willDelete.notFound.length, 1); assert.equal(r.willDelete.text[0].occurrencesFound, 1);
+  const before = g.docs.get("DEL_DOC")!.text;
+  assert.equal(before, g.docs.get("DEL_DOC")!.text, "preview must not change the doc");
+  r = must(await call("edit_student_doc", { ...dargs, confirmToken: r.confirmToken }), "delete apply");
+  assert.equal(g.docs.get("DEL_DOC")!.text, "My Report\nAim\nAim text here.\nConclusion\n\n");
+  assert.ok(r.charactersDeleted > 40);
+  // between + includeHeading:false
+  const d2 = { ...delArgs, fileId: "DEL_DOC", deleteBetween: [{ from: "Aim text" }], deleteSections: [{ heading: "Aim", includeHeading: false }] };
+  r = must(await call("edit_student_doc", d2), "between preview");
+  r = must(await call("edit_student_doc", { ...d2, confirmToken: r.confirmToken }), "between apply");
+  assert.equal(g.docs.get("DEL_DOC")!.text, "My Report\nAim\n\n", JSON.stringify(g.docs.get("DEL_DOC")!.text));
+  // clear
+  const d3 = { ...delArgs, fileId: "DEL_DOC", clearDocument: true };
+  r = must(await call("edit_student_doc", d3), "clear preview"); assert.equal(r.willDelete.ranges.length, 1);
+  must(await call("edit_student_doc", { ...d3, confirmToken: r.confirmToken }), "clear apply");
+  assert.equal(g.docs.get("DEL_DOC")!.text, "\n");
+  globalThis.fetch = realFetch2;
+}
 
 // terminal figure added to the student's Doc
 const termEdit = { courseId: "C1", assignmentId: "W1", fileId: "STUDENT_DOC", appendBlocks: [{ type: "terminal", theme: "powershell", source: "illustrative", caption: "Running the server", alt: "terminal", entries: [{ cmd: "node server.js", output: "listening on 8000" }] }] };

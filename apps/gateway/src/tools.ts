@@ -7,7 +7,7 @@ import * as cr from "./classroom.js";
 import { readGoogleFile } from "./files.js";
 import { createPickSession, getPicked, pickerEnabled } from "./context.js";
 import { applyEdits } from "./docapply.js";
-import { EditBlock } from "./docedit.js";
+import { EditBlock, planDeletions } from "./docedit.js";
 import {
   CourseSettingsSchema, deleteAll, getCourseSettings, getProfile, ProfileSchema, scanPlaceholders, updateCourseSettings, updateProfile,
 } from "./profile.js";
@@ -289,12 +289,17 @@ export function registerTools(server: McpServer, env: Env, props: Props) {
       description:
         "Fill in the student's OWN copy of an assignment Google Doc (the file listed in the bundle's submission.studentFiles). " +
         "Two steps: call once WITHOUT confirmToken to get a preview and a confirmToken; show the preview to the student and, only after they approve, call again with the SAME arguments plus confirmToken. " +
+        "deleteSections removes everything under a heading (up to the next heading of the same or higher level); deleteBetween removes from a paragraph containing some text up to (not including) one containing other text; deleteText removes every occurrence of exact text; clearDocument empties the whole body. Deletions run first, are shown in the preview with the exact words that will disappear, and can be undone in Google Docs under File > Version history. " +
         "replacements swaps placeholder text (e.g. [Your Name]) everywhere; appendBlocks adds headings, paragraphs (supports **bold**, *italic*, `code`), lists, code, tables, page breaks and terminal-session figures (type 'terminal'; source 'captured' only for output the student really produced, otherwise 'illustrative', which labels the caption as simulated) at the end. " +
         "Never edits files that are not the student's own submission attachment. The student must still press Turn In themselves.",
       inputSchema: {
         courseId: z.string(),
         assignmentId: z.string(),
         fileId: z.string(),
+        deleteSections: z.array(z.object({ heading: z.string().min(1).max(200), includeHeading: z.boolean().default(true) })).max(20).optional(),
+        deleteBetween: z.array(z.object({ from: z.string().min(1).max(200), to: z.string().min(1).max(200).optional() })).max(20).optional(),
+        deleteText: z.array(z.string().min(1).max(500)).max(30).optional(),
+        clearDocument: z.boolean().optional(),
         replacements: z.array(z.object({ find: z.string().min(1).max(200), replace: z.string().max(2000) })).max(50).optional(),
         appendBlocks: z.array(EditBlock).max(200).optional(),
         confirmToken: z.string().optional(),
@@ -305,7 +310,8 @@ export function registerTools(server: McpServer, env: Env, props: Props) {
       const own = subs.flatMap((s: any) => s.assignmentSubmission?.attachments ?? []).map(cr.summarizeMaterial);
       if (!own.some((f: any) => f.kind === "driveFile" && f.id === a.fileId))
         return { error: "fileId is not the student's own submission attachment for this assignment. Refusing to edit." };
-      if (!a.replacements?.length && !a.appendBlocks?.length) return { error: "Nothing to do: give replacements and/or appendBlocks." };
+      const hasDeletes = Boolean(a.deleteSections?.length || a.deleteBetween?.length || a.deleteText?.length || a.clearDocument);
+      if (!a.replacements?.length && !a.appendBlocks?.length && !hasDeletes) return { error: "Nothing to do: give deletions, replacements and/or appendBlocks." };
 
       const { confirmToken, ...core } = a;
       const argsHash = await sha256(canonical(core));
@@ -319,9 +325,20 @@ export function registerTools(server: McpServer, env: Env, props: Props) {
           .flatMap((el) => (el.paragraph?.elements ?? []).map((e: any) => e.textRun?.content ?? ""))
           .join("");
         const counts = (needle: string) => plain.split(needle).length - 1;
+        const plan = planDeletions(doc, { sections: a.deleteSections, between: a.deleteBetween, clear: a.clearDocument });
+        const textDeletes = (a.deleteText ?? []).map((t: string) => ({ text: t, occurrencesFound: counts(t) }));
         return {
           preview: true,
           document: doc.title,
+          willDelete: hasDeletes
+            ? {
+                ranges: plan.ranges.map((r) => ({ what: r.label, characters: r.characters, startsWith: r.preview })),
+                text: textDeletes,
+                notFound: plan.notFound,
+                notes: plan.notes,
+                warning: "Deletions remove content permanently from the live document (recoverable only via Version history). Show the student exactly what will go.",
+              }
+            : undefined,
           replacements: (a.replacements ?? []).map((r: any) => ({ ...r, occurrencesFound: counts(r.find) })),
           appendBlocks: (a.appendBlocks ?? []).map((b: any) => (b.type === "heading" ? `heading: ${b.text}` : b.type)),
           confirmToken: token,
@@ -332,11 +349,21 @@ export function registerTools(server: McpServer, env: Env, props: Props) {
       if (!(await checkConfirm(secret, confirmToken, props.userId, "edit_student_doc", argsHash)))
         return { error: "confirmToken is invalid, expired, or arguments changed since the preview. Call again without confirmToken to get a new preview." };
 
-      const { replaced, tablesFilled } = await applyEdits(t, a.fileId, { replacements: a.replacements, blocks: a.appendBlocks }, doc);
+      const { replaced, tablesFilled, deleted } = await applyEdits(
+        t,
+        a.fileId,
+        {
+          deletions: { sections: a.deleteSections, between: a.deleteBetween, clear: a.clearDocument, text: a.deleteText },
+          replacements: a.replacements,
+          blocks: a.appendBlocks,
+        },
+        doc,
+      );
       return {
         applied: true,
         document: doc.title,
         link: `https://docs.google.com/document/d/${a.fileId}/edit`,
+        charactersDeleted: deleted,
         replacementsMade: replaced,
         blocksAppended: a.appendBlocks?.length ?? 0,
         tablesFilled,

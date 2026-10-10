@@ -1,10 +1,12 @@
 import { buildTerminal } from "./terminal.js";
-import { appendPoint, buildAppend, findText, type AppendStyle, type EditBlockT } from "./docedit.js";
+import { appendPoint, buildAppend, findText, planDeletions, type AppendStyle, type DeletionSpec, type EditBlockT } from "./docedit.js";
 import { gget, gpost } from "./google.js";
 
 const DOCS = "https://docs.googleapis.com/v1/documents";
 
 export interface ApplyOptions {
+  /** Removed first; text deletions use replacement-with-nothing. */
+  deletions?: DeletionSpec & { text?: string[] };
   replacements?: { find: string; replace: string }[];
   blocks?: EditBlockT[];
   style?: AppendStyle;
@@ -14,6 +16,25 @@ export interface ApplyOptions {
 export async function applyEdits(token: string, docId: string, opts: ApplyOptions, existing?: any) {
   const docUrl = `${DOCS}/${docId}`;
   const batch = (requests: any[]) => gpost<any>(token, `${docUrl}:batchUpdate`, { requests });
+
+  let deleted = 0;
+  let current = existing;
+  const del = opts.deletions;
+  if (del && (del.sections?.length || del.between?.length || del.clear || del.text?.length)) {
+    if (del.sections?.length || del.between?.length || del.clear) {
+      const doc = current ?? (await gget<any>(token, docUrl));
+      const plan = planDeletions(doc, del);
+      // Last range first, so earlier indexes stay valid.
+      const reqs = [...plan.ranges].sort((a, b) => b.start - a.start).map((r) => ({ deleteContentRange: { range: { startIndex: r.start, endIndex: r.end } } }));
+      if (reqs.length) await batch(reqs);
+      deleted += plan.ranges.reduce((n, r) => n + r.characters, 0);
+    }
+    if (del.text?.length) {
+      const r = await batch(del.text.map((t) => ({ replaceAllText: { containsText: { text: t, matchCase: true }, replaceText: "" } })));
+      deleted += (r.replies ?? []).reduce((n: number, x: any) => n + (x.replaceAllText?.occurrencesChanged ?? 0), 0);
+    }
+    current = undefined; // positions changed
+  }
 
   let replaced = 0;
   if (opts.replacements?.length) {
@@ -25,7 +46,7 @@ export async function applyEdits(token: string, docId: string, opts: ApplyOption
 
   let jobs: ReturnType<typeof buildAppend>["jobs"] = [];
   if (opts.blocks?.length) {
-    const fresh = opts.replacements?.length || !existing ? await gget<any>(token, docUrl) : existing;
+    const fresh = opts.replacements?.length || !current ? await gget<any>(token, docUrl) : current;
     const ap = appendPoint(fresh);
     const built = buildAppend(opts.blocks, ap.index, ap.hasText, opts.style);
     jobs = built.jobs;
@@ -70,7 +91,7 @@ export async function applyEdits(token: string, docId: string, opts: ApplyOption
       tablesFilled = newTables.length;
     }
   }
-  return { replaced, tablesFilled };
+  return { replaced, tablesFilled, deleted };
 }
 
 /** Page size, margins and an optional header for a freshly created document. */
