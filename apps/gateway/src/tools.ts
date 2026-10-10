@@ -88,7 +88,7 @@ export function registerTools(server: McpServer, env: Env, props: Props) {
       const courses = a.courseId ? [{ id: a.courseId, name: undefined }] : (await cr.listCourses(t)).slice(0, 8);
       const rows: any[] = [];
       for (const c of courses) {
-        const [work, subs] = await Promise.all([cr.listCourseWork(t, c.id), cr.listMySubmissions(t, c.id)]);
+        const [work, subs] = await Promise.all([cr.listCourseWork(t, c.id, 100, 1), cr.listMySubmissions(t, c.id, "-", 2)]);
         const byWork = new Map(subs.map((s) => [s.courseWorkId, s]));
         for (const w of work) {
           const s = byWork.get(w.id);

@@ -30,3 +30,13 @@ assert.equal(await checkConfirm("s3cret", t, "u2", "edit", "h1"), false);
 assert.equal(await checkConfirm("other", t, "u1", "edit", "h1"), false);
 assert.equal(await checkConfirm("s3cret", "1.abc", "u1", "edit", "h1"), false);
 console.log("unit tests passed");
+
+// requirements
+import { extractRequirements, draftStats } from "../apps/gateway/src/requirements.ts";
+const rq = extractRequirements("Submit as a PDF. Maximum 5 pages. Write 800-1000 words. Use APA citations. Name the file RollNo_Lab3. Deadline extended to Friday. You must include a diagram. Hello there.", "t");
+assert.deepEqual(rq.map((x) => x.kind), ["format", "pages", "words", "citation", "naming", "deadline", "other"]);
+assert.equal(rq[1].max, 5);
+assert.deepEqual([rq[2].min, rq[2].max], [800, 1000]);
+assert.equal(draftStats("Intro [Your Name] text").hasPlaceholders, true);
+assert.equal(draftStats("As shown (Elmasri, 2016) and [2].").hasInTextCitations, true);
+console.log("requirement tests passed");

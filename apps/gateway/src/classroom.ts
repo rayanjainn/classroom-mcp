@@ -2,74 +2,72 @@ import { gget } from "./google.js";
 
 const BASE = "https://classroom.googleapis.com/v1";
 
-export async function listCourses(token: string, includeArchived = false) {
-  const data = await gget<{ courses?: any[] }>(token, `${BASE}/courses`, {
+/** Follow nextPageToken up to maxPages, collecting `key` arrays. */
+async function paged<T>(token: string, url: string, key: string, params: Record<string, string | number | undefined>, maxPages = 2): Promise<T[]> {
+  const out: T[] = [];
+  let pageToken: string | undefined;
+  for (let i = 0; i < maxPages; i++) {
+    const data = await gget<Record<string, any>>(token, url, { ...params, pageToken });
+    out.push(...((data[key] as T[] | undefined) ?? []));
+    pageToken = data.nextPageToken;
+    if (!pageToken) break;
+  }
+  return out;
+}
+
+export const listCourses = (token: string, includeArchived = false) =>
+  paged<any>(token, `${BASE}/courses`, "courses", {
     studentId: "me",
     courseStates: includeArchived ? undefined : "ACTIVE",
     pageSize: 50,
-    fields: "courses(id,name,section,descriptionHeading,room,courseState,alternateLink,calendarId)",
+    fields: "nextPageToken,courses(id,name,section,descriptionHeading,description,room,courseState,alternateLink,calendarId)",
   });
-  return data.courses ?? [];
-}
 
-export async function listTopics(token: string, courseId: string) {
-  const data = await gget<{ topic?: any[] }>(token, `${BASE}/courses/${courseId}/topics`, {
-    pageSize: 100,
-    fields: "topic(topicId,name)",
-  });
-  return data.topic ?? [];
-}
+export const listTopics = (token: string, courseId: string) =>
+  paged<any>(token, `${BASE}/courses/${courseId}/topics`, "topic", { pageSize: 100, fields: "nextPageToken,topic(topicId,name)" });
 
 const WORK_FIELDS =
-  "courseWork(id,title,description,state,dueDate,dueTime,maxPoints,workType,topicId,alternateLink,updateTime,materials)";
+  "nextPageToken,courseWork(id,title,description,state,dueDate,dueTime,maxPoints,workType,topicId,alternateLink,creationTime,updateTime,materials,gradeCategory)";
 
-export async function listCourseWork(token: string, courseId: string, pageSize = 30) {
-  const data = await gget<{ courseWork?: any[] }>(token, `${BASE}/courses/${courseId}/courseWork`, {
-    orderBy: "dueDate desc",
-    pageSize,
-    fields: WORK_FIELDS,
-  });
-  return data.courseWork ?? [];
-}
+export const listCourseWork = (token: string, courseId: string, pageSize = 100, maxPages = 2) =>
+  paged<any>(token, `${BASE}/courses/${courseId}/courseWork`, "courseWork", { orderBy: "dueDate desc", pageSize, fields: WORK_FIELDS }, maxPages);
 
-export async function getCourseWork(token: string, courseId: string, id: string) {
-  return gget<any>(token, `${BASE}/courses/${courseId}/courseWork/${id}`);
-}
+export const getCourseWork = (token: string, courseId: string, id: string) => gget<any>(token, `${BASE}/courses/${courseId}/courseWork/${id}`);
 
-export async function listMySubmissions(token: string, courseId: string, courseWorkId = "-") {
-  const data = await gget<{ studentSubmissions?: any[] }>(
+export const listMySubmissions = (token: string, courseId: string, courseWorkId = "-", maxPages = 3) =>
+  paged<any>(
     token,
     `${BASE}/courses/${courseId}/courseWork/${courseWorkId}/studentSubmissions`,
+    "studentSubmissions",
     {
       userId: "me",
       pageSize: 100,
       fields:
-        "studentSubmissions(id,courseWorkId,state,late,draftGrade,assignedGrade,alternateLink,assignmentSubmission,shortAnswerSubmission,multipleChoiceSubmission,submissionHistory)",
+        "nextPageToken,studentSubmissions(id,courseWorkId,state,late,draftGrade,assignedGrade,alternateLink,updateTime,assignmentSubmission,shortAnswerSubmission,multipleChoiceSubmission,submissionHistory)",
     },
+    maxPages,
   );
-  return data.studentSubmissions ?? [];
-}
 
-export async function listAnnouncements(token: string, courseId: string, pageSize = 20) {
-  const data = await gget<{ announcements?: any[] }>(token, `${BASE}/courses/${courseId}/announcements`, {
-    pageSize,
-    fields: "announcements(id,text,materials,updateTime,creationTime,alternateLink)",
-  });
-  return data.announcements ?? [];
-}
+export const listAnnouncements = (token: string, courseId: string, pageSize = 30, maxPages = 2) =>
+  paged<any>(
+    token,
+    `${BASE}/courses/${courseId}/announcements`,
+    "announcements",
+    { pageSize, fields: "nextPageToken,announcements(id,text,materials,updateTime,creationTime,alternateLink)" },
+    maxPages,
+  );
 
-export async function listMaterials(token: string, courseId: string, pageSize = 30) {
-  const data = await gget<{ courseWorkMaterial?: any[] }>(token, `${BASE}/courses/${courseId}/courseWorkMaterials`, {
-    pageSize,
-    fields: "courseWorkMaterial(id,title,description,topicId,materials,updateTime,alternateLink)",
-  });
-  return data.courseWorkMaterial ?? [];
-}
+export const listMaterials = (token: string, courseId: string, pageSize = 50, maxPages = 2) =>
+  paged<any>(
+    token,
+    `${BASE}/courses/${courseId}/courseWorkMaterials`,
+    "courseWorkMaterial",
+    { pageSize, fields: "nextPageToken,courseWorkMaterial(id,title,description,topicId,materials,updateTime,creationTime,alternateLink)" },
+    maxPages,
+  );
 
-export async function getRubrics(token: string, courseId: string, courseWorkId: string) {
-  const data = await gget<{ rubrics?: any[] }>(token, `${BASE}/courses/${courseId}/courseWork/${courseWorkId}/rubrics`);
-  return data.rubrics ?? [];
-}
+export const getRubrics = (token: string, courseId: string, courseWorkId: string) =>
+  paged<any>(token, `${BASE}/courses/${courseId}/courseWork/${courseWorkId}/rubrics`, "rubrics", {}, 1);
 
 /** Reduce a Classroom `Material` to something compact and uniform. */
 export function summarizeMaterial(m: any) {
@@ -84,10 +82,15 @@ export function summarizeMaterial(m: any) {
   return { kind: "unknown" };
 }
 
-export function dueIso(w: { dueDate?: { year: number; month: number; day: number }; dueTime?: { hours?: number; minutes?: number } }) {
+type DueParts = { dueDate?: { year: number; month: number; day: number }; dueTime?: { hours?: number; minutes?: number } };
+
+/** Classroom due dates are UTC. Returns an ISO string or null. */
+export function dueIso(w: DueParts) {
   if (!w.dueDate) return null;
   const { year, month, day } = w.dueDate;
-  const h = w.dueTime?.hours ?? 23;
-  const mi = w.dueTime?.minutes ?? 59;
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}Z`;
+  const h = w.dueTime?.hours ?? 0;
+  const mi = w.dueTime?.minutes ?? 0;
+  // With a date but no time, Classroom treats the work as due at the end of that day.
+  const [hh, mm] = w.dueTime ? [h, mi] : [23, 59];
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00Z`;
 }
