@@ -10,6 +10,9 @@ export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/classroom.courseworkmaterials.readonly",
   "https://www.googleapis.com/auth/classroom.announcements.readonly",
   "https://www.googleapis.com/auth/classroom.topics.readonly",
+  "https://www.googleapis.com/auth/documents.readonly",
+  "https://www.googleapis.com/auth/presentations.readonly",
+  "https://www.googleapis.com/auth/spreadsheets.readonly",
 ];
 
 export function googleAuthUrl(env: Env, state: string, codeChallenge: string): string {
