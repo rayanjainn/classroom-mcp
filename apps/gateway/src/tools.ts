@@ -351,7 +351,8 @@ export function registerTools(server: McpServer, env: Env, props: Props) {
       let jobs: any[] = [];
       if (a.appendBlocks?.length) {
         const fresh = a.replacements?.length ? await gget<any>(t, docUrl) : doc;
-        const built = buildAppend(a.appendBlocks, appendPoint(fresh));
+        const ap = appendPoint(fresh);
+        const built = buildAppend(a.appendBlocks, ap.index, ap.hasText);
         jobs = built.jobs;
         await batch(built.requests);
       }

@@ -51,10 +51,15 @@ const range = (startIndex: number, endIndex: number) => ({ startIndex, endIndex 
  * Build Docs batchUpdate requests that append blocks at `start` (the index of the document's
  * final, empty paragraph). Tables are emitted as placeholder paragraphs and filled in later passes.
  */
-export function buildAppend(blocks: EditBlockT[], start: number) {
+export function buildAppend(blocks: EditBlockT[], start: number, leadingBreak = false) {
   const requests: any[] = [];
   const jobs: PostJob[] = [];
   let idx = start;
+  if (leadingBreak) {
+    // The last paragraph already has text: start a new paragraph instead of extending it.
+    requests.push({ insertText: { location: { index: idx }, text: "\n" } });
+    idx += 1;
+  }
 
   const para = (runs: Run[], named: string, extra?: (s: number, e: number) => void) => {
     const text = runs.map((r) => r.text).join("");
@@ -129,10 +134,12 @@ export function buildAppend(blocks: EditBlockT[], start: number) {
   return { requests, jobs, endIndex: idx };
 }
 
-/** Index of the final empty paragraph: insert point for appending. */
-export function appendPoint(doc: any): number {
+/** Insert point for appending (just before the document's final newline), and whether that paragraph has text. */
+export function appendPoint(doc: any): { index: number; hasText: boolean } {
   const content = doc.body.content;
-  return content[content.length - 1].endIndex - 1;
+  const last = content[content.length - 1];
+  const text = (last.paragraph?.elements ?? []).map((e: any) => e.textRun?.content ?? "").join("");
+  return { index: last.endIndex - 1, hasText: text.replace(/\n$/, "").length > 0 };
 }
 
 /** Find the paragraph containing `needle`; returns its start index. */
