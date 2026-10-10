@@ -31,6 +31,19 @@
     if (!r.ok) return say("This link has expired. Ask your assistant to read the file again.", "err");
     session = await r.json();
     if (!session.apiKey || !session.appId) return say("File picking is not configured on this server yet.", "err");
+    if (new URLSearchParams(location.search).has("debug")) {
+      const mask = (v) => (v ? v.slice(0, 6) + "\u2026" + v.slice(-4) + " (" + v.length + " chars)" : "(missing)");
+      $("debug").hidden = false;
+      $("debug").textContent = [
+        "page origin:  " + location.origin,
+        "API key:      " + mask(session.apiKey),
+        "project no.:  " + (session.appId || "(missing)"),
+        "OAuth client: " + mask(session.clientId),
+        "expected file: " + (session.expectFileId || "(any)"),
+        "referrer sent: " + (document.referrer || "(none)"),
+        "user agent:   " + navigator.userAgent,
+      ].join("\n");
+    }
     if (session.name) $("fname").textContent = session.name;
     $("go").disabled = false;
     say("Ready. Click the button to choose the file.");

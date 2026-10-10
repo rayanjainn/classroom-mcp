@@ -28,3 +28,14 @@ Until both vars are set, `read_attachment` simply reports that PDF/Word files ca
 Also add `https://www.googleapis.com/auth/drive.file` to the consent screen's Data Access list if it is not there yet (it is a non-sensitive scope).
 
 How it works: `read_attachment` returns a one-time link; the student opens it, signs in (drive.file only), picks the file; the page downloads it in the browser, extracts the text (pdf.js / mammoth, self-hosted under `/vendor`) and sends only the text to the gateway, which stores it encrypted for 30 days.
+
+## Troubleshooting
+
+**"There was an error! The API developer key is invalid."** (shown inside the Google window)
+
+Open the picker link with `&debug=1` added to see the exact key (masked), project number and origin the page uses, then check, in this order:
+
+1. **Restrictions.** In Credentials, edit the key and set Application restrictions to *None* and API restrictions to *Don't restrict key* just to test. If the picker then works, tighten them again: Websites `https://classroom.raycode.tech/*` **and** `https://classroom.raycode.tech`, APIs: Google Picker API (add Google Drive API too if it still fails). Changes can take up to 5 minutes.
+2. **Same project.** The API key, the OAuth client and the project number must all belong to the *same* Google Cloud project, and the Picker API must be enabled in that project.
+3. **Value in `wrangler.toml`.** No quotes or spaces inside the string, and deployed with `npx wrangler deploy` from `apps/gateway`. The `&debug=1` view shows the length of the key (39 characters for a standard key).
+4. **Browser.** Brave Shields or privacy extensions can strip the referrer Google checks. Try a normal Chrome window, or lower Shields for `classroom.raycode.tech`.
