@@ -289,7 +289,7 @@ export function registerTools(server: McpServer, env: Env, props: Props) {
       description:
         "Fill in the student's OWN copy of an assignment Google Doc (the file listed in the bundle's submission.studentFiles). " +
         "Two steps: call once WITHOUT confirmToken to get a preview and a confirmToken; show the preview to the student and, only after they approve, call again with the SAME arguments plus confirmToken. " +
-        "replacements swaps placeholder text (e.g. [Your Name]) everywhere; appendBlocks adds headings, paragraphs (supports **bold**, *italic*, `code`), lists, code, tables and page breaks at the end. " +
+        "replacements swaps placeholder text (e.g. [Your Name]) everywhere; appendBlocks adds headings, paragraphs (supports **bold**, *italic*, `code`), lists, code, tables, page breaks and terminal-session figures (type 'terminal'; source 'captured' only for output the student really produced, otherwise 'illustrative', which labels the caption as simulated) at the end. " +
         "Never edits files that are not the student's own submission attachment. The student must still press Turn In themselves.",
       inputSchema: {
         courseId: z.string(),

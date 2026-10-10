@@ -89,11 +89,22 @@ assert.equal(doc.tables, 1); assert.equal(doc.pageBreaks, 1);
 assert.ok(!doc.text.includes("§§"), "placeholders cleaned up: " + JSON.stringify(doc.text));
 assert.equal(doc.styles[doc.text.split("\n").indexOf("Aim")], "HEADING_1");
 
+// terminal figure added to the student's Doc
+const termEdit = { courseId: "C1", assignmentId: "W1", fileId: "STUDENT_DOC", appendBlocks: [{ type: "terminal", theme: "powershell", source: "illustrative", caption: "Running the server", alt: "terminal", entries: [{ cmd: "node server.js", output: "listening on 8000" }] }] };
+r = must(await call("edit_student_doc", termEdit), "terminal preview");
+r = must(await call("edit_student_doc", { ...termEdit, confirmToken: r.confirmToken }), "terminal apply"); assert.equal(r.applied, true);
+assert.match(doc.text, /Figure: Running the server \(simulated output\)/);
+assert.equal(doc.tables, 2, "terminal becomes a table");
+
 // render: latex
 const spec = JSON.parse(JSON.stringify(sample));
 r = must(await call("render_document", { spec, courseId: "C1", courseName: "MCP 101", assignmentTitle: "Understanding MCP" }), "render latex");
 assert.equal(r.format, "latex"); assert.match(r.overleafLink, /^https:\/\/mcp\.test\/open\/[a-f0-9]{32}$/); assert.ok(r.tex.includes("\\begin{document}")); assert.ok(r.driveFile.id);
 const cspec = JSON.parse(JSON.stringify(sample)); cspec.blocks.find((x: any) => x.type === "cover").fields = { date: "10 Oct" };
+const tspec2 = JSON.parse(JSON.stringify(spec)); tspec2.blocks.push({ type: "terminal", theme: "ubuntu", source: "captured", caption: "Run", alt: "t", entries: [{ cmd: "ls", output: "a  b" }] }, { type: "ui", kind: "browser", source: "illustrative", caption: "Page", alt: "p", title: "T", url: "https://x.test", content: [{ t: "heading", text: "Hi" }] });
+r = must(await call("render_document", { spec: tspec2, saveToDrive: false }), "render with figures");
+assert.ok(r.tex.includes("tikzpicture") && r.tex.includes("(simulated)"), "illustrative UI is labelled");
+assert.ok(!r.tex.includes("simulated output"), "captured terminal carries no simulated label");
 const cr2 = must(await call("render_document", { spec: cspec, courseId: "C1", saveToDrive: false }), "render latex cover");
 for (const want of ["Test Institute", "Rayan Jain", "21CS001", "CS101", "Dr T"]) assert.ok(cr2.tex.includes(want), "cover missing " + want);
 assert.equal(g.uploads.length, 1); assert.equal(g.uploads[0].name, "Understanding MCP.tex");

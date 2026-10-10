@@ -59,8 +59,59 @@ export const Diagram = z.object({
   edges: z.array(z.object({ from: z.string(), to: z.string(), label: text(40).optional() })).max(60),
 });
 
+const Source = z
+  .enum(["captured", "illustrative"])
+  .describe("'captured' only when the content is the real output of a real run the student did; otherwise 'illustrative' (the caption then notes it is simulated)");
+
+export const TerminalEntry = z.object({
+  cwd: text(200).optional().describe("working directory shown in the prompt from this entry on (e.g. ~/lab3 or C:\\Users\\user\\lab3)"),
+  cmd: text(2000).optional().describe("the command typed after the prompt"),
+  output: text(20_000).optional().describe("the lines printed by the command"),
+  error: z.boolean().optional().describe("force the whole output red"),
+});
+export const Terminal = z.object({
+  type: z.literal("terminal"),
+  theme: z.enum(["ubuntu", "macos-dark", "macos-light", "powershell", "cmd", "vscode"]).default("ubuntu"),
+  shell: z.enum(["bash", "zsh", "powershell", "cmd"]).optional().describe("defaults from the theme"),
+  source: Source,
+  caption: text(500).min(1),
+  alt: text(500).min(1),
+  user: text(40).optional(),
+  host: text(60).optional(),
+  columns: z.number().int().min(40).max(140).default(80),
+  title: text(120).optional().describe("window title override"),
+  entries: z.array(TerminalEntry).min(1).max(60),
+  endPrompt: z.boolean().default(true).describe("finish with an empty prompt and cursor, as in a real session"),
+});
+
+export const UiElement = z.discriminatedUnion("t", [
+  z.object({ t: z.literal("heading"), text: text(120) }),
+  z.object({ t: z.literal("text"), text: text(600) }),
+  z.object({ t: z.literal("button"), text: text(40), primary: z.boolean().optional() }),
+  z.object({ t: z.literal("buttons"), labels: z.array(text(40)).min(1).max(5), primary: z.number().int().min(0).optional() }),
+  z.object({ t: z.literal("input"), label: text(60), value: text(120).optional(), placeholder: text(120).optional() }),
+  z.object({ t: z.literal("table"), columns: z.array(text(40)).min(1).max(6), rows: z.array(z.array(text(60))).max(15) }),
+  z.object({ t: z.literal("list"), items: z.array(text(100)).max(12) }),
+  z.object({ t: z.literal("code"), text: text(800) }),
+  z.object({ t: z.literal("alert"), text: text(200), tone: z.enum(["info", "success", "warning", "error"]).default("info") }),
+]);
+export const Ui = z.object({
+  type: z.literal("ui"),
+  kind: z.enum(["browser", "window"]).default("browser"),
+  theme: z.enum(["light", "dark"]).default("light"),
+  source: Source,
+  caption: text(500).min(1),
+  alt: text(500).min(1),
+  title: text(100).describe("browser tab title or window title"),
+  url: text(200).optional().describe("address bar text (browser only)"),
+  menu: z.array(text(30)).max(8).optional().describe("top menu items, e.g. File, Edit, View"),
+  sidebar: z.array(text(40)).max(10).optional(),
+  activeSidebar: z.number().int().min(0).optional(),
+  content: z.array(UiElement).min(1).max(20),
+});
+
 export const Block = z.discriminatedUnion("type", [
-  Heading, Paragraph, Equation, Table, Code, List, Quote, Abstract, Algorithm, Cover, Simple, Chart, Diagram,
+  Heading, Paragraph, Equation, Table, Code, List, Quote, Abstract, Algorithm, Cover, Simple, Chart, Diagram, Terminal, Ui,
 ]);
 
 export const BibEntry = z.object({
@@ -98,4 +149,6 @@ export const DocSpec = z.object({
 
 export type DocSpecT = z.infer<typeof DocSpec>;
 export type BlockT = z.infer<typeof Block>;
+export type TerminalT = z.infer<typeof Terminal>;
+export type UiT = z.infer<typeof Ui>;
 export type BibEntryT = z.infer<typeof BibEntry>;

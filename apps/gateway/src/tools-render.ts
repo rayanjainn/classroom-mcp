@@ -58,7 +58,7 @@ export function registerRenderTools(server: McpServer, env: Env, props: Props) {
         "Build a finished document from a structured DocSpec (headings, paragraphs with **bold**/*italic*/`code`/$math$/[@cite], tables, equations, code, lists, charts, flow diagrams, cover page, references). " +
         "format 'latex': returns publication-quality LaTeX (.tex saved to the student's Drive, plus a one-click Overleaf link that compiles it to PDF) with a lint report and estimated page count. " +
         "format 'google-doc': creates a NEW editable Google Doc in the student's Drive (with PDF/Word export links). Charts and diagrams appear as tables/lists there. " +
-        "Never edits existing files (use edit_student_doc for the student's own submission copy). Check the lint report and estimatedPages against the assignment requirements before handing over. " +
+        "Terminal sessions (type 'terminal': Ubuntu/macOS/PowerShell/cmd/VS Code, with real ANSI colours) and UI mockups (type 'ui': browser or app window) can be drawn as figures. Each one needs source 'captured' (the exact output of a real run the student did) or 'illustrative' (simulated; its caption then says so). Use 'captured' only when the student actually ran it and pasted the real output. Terminals work in both formats; UI mockups only in LaTeX. Never edits existing files (use edit_student_doc for the student's own submission copy). Check the lint report and estimatedPages against the assignment requirements before handing over. " +
         `Cover fields not given are filled from the saved profile. ${UNTRUSTED_NOTE}`,
       inputSchema: RenderInput,
     },

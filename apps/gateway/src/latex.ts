@@ -1,4 +1,6 @@
 import type { BlockT, DocSpecT } from "@classroompilot/shared";
+import { terminalFigure } from "./terminal-tex.js";
+import { uiFigure } from "./ui-tex.js";
 import { citedKeys, formatEntry, inText, orderBibliography } from "./cite.js";
 
 export interface LintItem {
@@ -60,6 +62,7 @@ interface Ctx {
   lint: LintItem[];
   bibMap: Map<string, DocSpecT["bibliography"][number]>;
   order: string[];
+  unicode: boolean;
 }
 
 const INLINE = /(\$(?!\s)[^$\n]+?(?<!\s)\$|`[^`\n]+`|\*\*[^*\n]+\*\*|\*[^*\n]+\*|\[@[^\]\n]+\])/g;
@@ -337,6 +340,20 @@ function renderBlock(b: BlockT, ctx: Ctx): string {
       return chart(b, ctx);
     case "diagram":
       return diagram(b, ctx);
+    case "terminal": {
+      const note = b.source === "illustrative" ? " \\emph{(simulated output)}" : "";
+      const r = terminalFigure(b, { esc, caption: inline(b.caption, ctx) + note, mono: !ctx.unicode });
+      for (const w of r.warnings) ctx.lint.push({ level: "warning", message: w });
+      if (b.source === "illustrative") ctx.lint.push({ level: "info", message: "A terminal figure is marked illustrative: its caption says the output is simulated." });
+      return r.tex;
+    }
+    case "ui": {
+      const note = b.source === "illustrative" ? " \\emph{(simulated)}" : "";
+      const r = uiFigure(b, { esc, caption: inline(b.caption, ctx) + note });
+      for (const w of r.warnings) ctx.lint.push({ level: "warning", message: w });
+      if (b.source === "illustrative") ctx.lint.push({ level: "info", message: "A UI figure is marked illustrative: its caption says it is simulated." });
+      return r.tex;
+    }
     case "cover":
       return ""; // handled separately
   }
@@ -352,6 +369,8 @@ const blockTexts = (b: BlockT): string[] => {
     case "table": return [...b.columns, ...b.rows.flat(), b.caption ?? ""];
     case "algorithm": return [b.caption, ...b.steps];
     case "chart": case "diagram": return [b.caption];
+    case "terminal": return [b.caption, b.title ?? "", ...b.entries.flatMap((e) => [e.cmd ?? "", e.output ?? "", e.cwd ?? ""])];
+    case "ui": return [b.caption, b.title, b.url ?? "", ...(b.menu ?? []), ...(b.sidebar ?? [])];
     default: return [];
   }
 };
@@ -376,6 +395,8 @@ export function estimatePages(spec: DocSpecT): number {
     if (b.type === "table") pages += 0.15 + b.rows.length * 0.03;
     else if (b.type === "chart" || b.type === "diagram") pages += 0.38;
     else if (b.type === "code") pages += b.text.split("\n").length / 48;
+    else if (b.type === "terminal") pages += 0.12 + b.entries.reduce((k, e) => k + (e.output?.split("\n").length ?? 0) + 1, 0) / 52;
+    else if (b.type === "ui") pages += 0.45;
     else if (b.type === "cover" || b.type === "toc") pages += 1;
     else if (b.type === "equation") pages += 0.04;
   }
@@ -407,17 +428,19 @@ export function toLatex(spec: DocSpecT): LatexResult {
   const lint = lintSpec(spec);
   const cited = citedKeys(allText(spec));
   const bibMap = new Map(spec.bibliography.map((b) => [b.key, b]));
-  const ctx: Ctx = { spec, lint, bibMap, order: cited.filter((k) => bibMap.has(k)) };
-  const m = spec.meta;
   const unicode = needsUnicodeEngine(spec);
+  const ctx: Ctx = { spec, lint, bibMap, order: cited.filter((k) => bibMap.has(k)), unicode };
+  const m = spec.meta;
   const engine: LatexResult["engine"] = unicode ? "xelatex" : "pdflatex";
   const gray = m.colorMode === "grayscale";
   const coverBlock = spec.blocks.find((b) => b.type === "cover") as Extract<BlockT, { type: "cover" }> | undefined;
   const hasChartOrDiagram = spec.blocks.some((b) => b.type === "chart" || b.type === "diagram");
+  const hasDrawn = hasChartOrDiagram || spec.blocks.some((b) => b.type === "terminal" || b.type === "ui");
+  const hasTerminal = spec.blocks.some((b) => b.type === "terminal" || b.type === "ui");
   const unnumbered = m.template === "lab-report" || m.template === "assignment-answers";
 
   const fontPre = unicode
-    ? `\\usepackage{fontspec}\n${m.font === "times" ? "\\setmainfont{TeX Gyre Termes}" : m.font === "sans" ? "\\setmainfont{Latin Modern Sans}" : ""}`
+    ? `\\usepackage{fontspec}\n${m.font === "times" ? "\\setmainfont{TeX Gyre Termes}" : m.font === "sans" ? "\\setmainfont{Latin Modern Sans}" : ""}${hasTerminal ? "\n\\IfFontExistsTF{DejaVu Sans Mono}{\\setmonofont{DejaVu Sans Mono}}{}" : ""}`
     : `\\usepackage[T1]{fontenc}\n\\usepackage[utf8]{inputenc}\n${m.font === "times" ? "\\usepackage{mathptmx}" : m.font === "sans" ? "\\usepackage{helvet}\n\\renewcommand{\\familydefault}{\\sfdefault}" : "\\usepackage{lmodern}"}`;
 
   const body: string[] = [];
@@ -436,7 +459,7 @@ ${fontPre}
 \\usepackage[${m.paper === "A4" ? "a4paper" : "letterpaper"},margin=${m.marginCm}cm]{geometry}
 \\usepackage{amsmath,amssymb,booktabs,tabularx,longtable,array,graphicx,caption,listings,enumitem,setspace,fancyhdr,adjustbox}
 \\usepackage[${gray ? "gray" : "dvipsnames"}]{xcolor}
-${hasChartOrDiagram ? "\\usepackage{pgfplots}\n\\pgfplotsset{compat=1.16}\n\\usetikzlibrary{arrows.meta,shapes.geometric,positioning}\n" : ""}\\usepackage[colorlinks=true,linkcolor=black,citecolor=black,urlcolor=${gray ? "black" : "blue"}]{hyperref}
+${hasDrawn ? "\\usepackage{pgfplots}\n\\pgfplotsset{compat=1.16}\n\\usetikzlibrary{arrows.meta,shapes.geometric,positioning}\n" : ""}\\usepackage[colorlinks=true,linkcolor=black,citecolor=black,urlcolor=${gray ? "black" : "blue"}]{hyperref}
 \\setstretch{${m.lineSpacing}}
 ${unnumbered ? "\\setcounter{secnumdepth}{0}\n" : ""}\\lstset{basicstyle=\\ttfamily\\small,breaklines=true,frame=single,numbers=left,numberstyle=\\tiny,columns=fullflexible,keepspaces=true,showstringspaces=false,xleftmargin=1.5em,framexleftmargin=1.5em}
 \\captionsetup{font=small,labelfont=bf}

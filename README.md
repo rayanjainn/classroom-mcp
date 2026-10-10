@@ -15,6 +15,7 @@ A remote MCP server that connects a student's own AI assistant to Google Classro
 | Files | `read_attachment` (Google files directly; PDF/Word via the picker) |
 | Profile | `get_profile`, `update_profile`, `delete_my_data`, `map_profile_to_template` |
 | Documents | `analyze_template`, `render_document` (LaTeX with Overleaf link, or a new Google Doc), `edit_student_doc` (preview, then confirm) |
+| Figures | inside documents: charts, flow diagrams, **terminal sessions** (Ubuntu, macOS, PowerShell, cmd, VS Code; real ANSI colours; LaTeX and Google Docs) and **UI mockups** (browser or app window; LaTeX). Each is marked `captured` (real output) or `illustrative` (caption says simulated) |
 | Hand-off | `check_requirements`, `prepare_submission`, `verify_turned_in`, `weekly_plan`, `whoami` |
 
 ## Develop

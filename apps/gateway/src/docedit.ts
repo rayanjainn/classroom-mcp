@@ -1,3 +1,4 @@
+import { Terminal, type TerminalT } from "@classroompilot/shared";
 import { z } from "zod";
 
 export const EditBlock = z.discriminatedUnion("type", [
@@ -11,6 +12,7 @@ export const EditBlock = z.discriminatedUnion("type", [
     rows: z.array(z.array(z.string().max(1_000))).max(60),
   }),
   z.object({ type: z.literal("pagebreak") }),
+  Terminal,
 ]);
 export type EditBlockT = z.infer<typeof EditBlock>;
 
@@ -41,8 +43,9 @@ export function parseInline(src: string): Run[] {
 /** Work done in a later pass because it changes indexes unpredictably. */
 export interface PostJob {
   placeholder: string;
-  kind: "table" | "pagebreak";
+  kind: "table" | "pagebreak" | "terminal";
   cells?: string[][];
+  terminal?: TerminalT;
 }
 
 const range = (startIndex: number, endIndex: number) => ({ startIndex, endIndex });
@@ -130,6 +133,13 @@ export function buildAppend(blocks: EditBlockT[], start: number, leadingBreak = 
         const placeholder = `§§JOB${jobs.length}§§`;
         para([{ text: placeholder }], "NORMAL_TEXT");
         jobs.push({ placeholder, kind: "pagebreak" });
+        break;
+      }
+      case "terminal": {
+        const placeholder = `§§JOB${jobs.length}§§`;
+        para([{ text: placeholder }], "NORMAL_TEXT");
+        jobs.push({ placeholder, kind: "terminal", terminal: b });
+        para(parseInline(`*Figure: ${b.caption}${b.source === "illustrative" ? " (simulated output)" : ""}*`), "NORMAL_TEXT");
         break;
       }
       case "table": {

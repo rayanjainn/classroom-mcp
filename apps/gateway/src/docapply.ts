@@ -1,3 +1,4 @@
+import { buildTerminal } from "./terminal.js";
 import { appendPoint, buildAppend, findText, type AppendStyle, type EditBlockT } from "./docedit.js";
 import { gget, gpost } from "./google.js";
 
@@ -46,34 +47,25 @@ export async function applyEdits(token: string, docId: string, opts: ApplyOption
       second.push(
         j.kind === "table"
           ? { insertTable: { location: { index: pos!.start }, rows: j.cells!.length, columns: j.cells![0].length } }
-          : { insertPageBreak: { location: { index: pos!.start } } },
+          : j.kind === "terminal"
+            ? { insertTable: { location: { index: pos!.start }, rows: 2, columns: 1 } }
+            : { insertPageBreak: { location: { index: pos!.start } } },
       );
     }
     if (second.length) await batch(second);
 
-    const tableJobs = jobs.filter((j) => j.kind === "table");
+    const tableJobs = located.map((x) => x.j).filter((j) => j.kind === "table" || j.kind === "terminal").reverse(); // document order
     if (tableJobs.length) {
       const d3 = await gget<any>(token, docUrl);
       const newTables = (d3.body.content as any[]).filter((el) => el.table).slice(-tableJobs.length);
-      const fills: { at: number; text: string; bold: boolean }[] = [];
+      // Each table's requests only touch its own (and later) positions, so apply tables last-to-first.
+      const groups: { key: number; reqs: any[] }[] = [];
       newTables.forEach((tbl, ti) => {
-        const cells = tableJobs[ti].cells!;
-        tbl.table.tableRows.forEach((row: any, ri: number) =>
-          row.tableCells.forEach((cell: any, ci: number) => {
-            const text = cells[ri]?.[ci];
-            if (text) fills.push({ at: cell.content[0].startIndex, text, bold: ri === 0 });
-          }),
-        );
+        const job = tableJobs[ti];
+        groups.push({ key: tbl.startIndex, reqs: job.kind === "terminal" ? terminalRequests(tbl, job.terminal!) : plainTableRequests(tbl, job.cells!, opts.style?.font) });
       });
-      fills.sort((x, y) => y.at - x.at);
-      const fillReqs: any[] = [];
-      for (const f of fills) {
-        fillReqs.push({ insertText: { location: { index: f.at }, text: f.text } });
-        const ts: any = { bold: f.bold };
-        const fields = ["bold"];
-        if (opts.style?.font) (ts.weightedFontFamily = { fontFamily: opts.style.font }), fields.push("weightedFontFamily");
-        fillReqs.push({ updateTextStyle: { range: { startIndex: f.at, endIndex: f.at + f.text.length }, textStyle: ts, fields: fields.join(",") } });
-      }
+      groups.sort((x, y) => y.key - x.key);
+      const fillReqs = groups.flatMap((g) => g.reqs);
       for (let i = 0; i < fillReqs.length; i += 400) await batch(fillReqs.slice(i, i + 400));
       tablesFilled = newTables.length;
     }
@@ -101,4 +93,107 @@ export async function styleNewDoc(token: string, docId: string, o: { paper: "A4"
     const headerId = r.replies?.[0]?.createHeader?.headerId;
     if (headerId) await gpost(token, url, { requests: [{ insertText: { location: { segmentId: headerId, index: 0 }, text: o.header } }] });
   }
+}
+
+function plainTableRequests(tbl: any, cells: string[][], font?: string) {
+  const fills: { at: number; text: string; bold: boolean }[] = [];
+  tbl.table.tableRows.forEach((row: any, ri: number) =>
+    row.tableCells.forEach((cell: any, ci: number) => {
+      const text = cells[ri]?.[ci];
+      if (text) fills.push({ at: cell.content[0].startIndex, text, bold: ri === 0 });
+    }),
+  );
+  fills.sort((x, y) => y.at - x.at);
+  const reqs: any[] = [];
+  for (const f of fills) {
+    reqs.push({ insertText: { location: { index: f.at }, text: f.text } });
+    const ts: any = { bold: f.bold };
+    const fields = ["bold"];
+    if (font) (ts.weightedFontFamily = { fontFamily: font }), fields.push("weightedFontFamily");
+    reqs.push({ updateTextStyle: { range: { startIndex: f.at, endIndex: f.at + f.text.length }, textStyle: ts, fields: fields.join(",") } });
+  }
+  return reqs;
+}
+
+const rgb = (hex: string) => ({
+  color: { rgbColor: { red: parseInt(hex.slice(0, 2), 16) / 255, green: parseInt(hex.slice(2, 4), 16) / 255, blue: parseInt(hex.slice(4), 16) / 255 } },
+});
+
+/** A terminal "screenshot" as a two-row dark table: title bar and monospaced body with coloured runs. */
+export function terminalRequests(tbl: any, t: import("@classroompilot/shared").TerminalT) {
+  const m = buildTerminal(t);
+  const th = m.theme;
+  const mono = th.chrome === "windows" || th.chrome === "vscode" ? "Consolas" : "Roboto Mono";
+  const start = tbl.startIndex;
+  const loc = (row: number) => ({ tableCellLocation: { tableStartLocation: { index: start }, rowIndex: row, columnIndex: 0 }, rowSpan: 1, columnSpan: 1 });
+  const border = { color: rgb(th.border), width: { magnitude: 0.75, unit: "PT" }, dashStyle: "SOLID" };
+  const cellStyle = (bg: string, pad: number) => ({
+    backgroundColor: rgb(bg),
+    paddingTop: { magnitude: pad, unit: "PT" }, paddingBottom: { magnitude: pad, unit: "PT" },
+    paddingLeft: { magnitude: 8, unit: "PT" }, paddingRight: { magnitude: 8, unit: "PT" },
+    borderTop: border, borderBottom: border, borderLeft: border, borderRight: border,
+  });
+  const cellFields = "backgroundColor,paddingTop,paddingBottom,paddingLeft,paddingRight,borderTop,borderBottom,borderLeft,borderRight";
+  const reqs: any[] = [
+    { updateTableCellStyle: { tableRange: loc(0), tableCellStyle: cellStyle(th.titleBg, 4), fields: cellFields } },
+    { updateTableCellStyle: { tableRange: loc(1), tableCellStyle: cellStyle(th.bg, 8), fields: cellFields } },
+  ];
+
+  // Body (row 1 first: it has the higher index).
+  const body = m.lines.map((l) => l.map((s) => s.t).join("")).join("\n");
+  const bodyAt = tbl.table.tableRows[1].tableCells[0].content[0].startIndex;
+  if (body) {
+    reqs.push({ insertText: { location: { index: bodyAt }, text: body } });
+    reqs.push({
+      updateTextStyle: {
+        range: { startIndex: bodyAt, endIndex: bodyAt + body.length },
+        textStyle: { bold: false, italic: false, fontSize: { magnitude: 9, unit: "PT" }, weightedFontFamily: { fontFamily: mono }, foregroundColor: rgb(th.fg) },
+        fields: "bold,italic,fontSize,weightedFontFamily,foregroundColor",
+      },
+    });
+    reqs.push({
+      updateParagraphStyle: {
+        range: { startIndex: bodyAt, endIndex: bodyAt + body.length },
+        paragraphStyle: { lineSpacing: 100, spaceAbove: { magnitude: 0, unit: "PT" }, spaceBelow: { magnitude: 0, unit: "PT" }, alignment: "START" },
+        fields: "lineSpacing,spaceAbove,spaceBelow,alignment",
+      },
+    });
+    let pos = bodyAt;
+    m.lines.forEach((l, i) => {
+      for (const seg of l) {
+        if (seg.t && (seg.c || seg.b))
+          reqs.push({
+            updateTextStyle: {
+              range: { startIndex: pos, endIndex: pos + seg.t.length },
+              textStyle: { ...(seg.c ? { foregroundColor: rgb(seg.c) } : {}), ...(seg.b ? { bold: true } : {}) },
+              fields: [seg.c ? "foregroundColor" : "", seg.b ? "bold" : ""].filter(Boolean).join(","),
+            },
+          });
+        pos += seg.t.length;
+      }
+      if (i < m.lines.length - 1) pos += 1; // newline
+    });
+  }
+
+  // Title bar
+  const title = th.chrome === "vscode" ? "PROBLEMS    OUTPUT    DEBUG CONSOLE    TERMINAL    PORTS" : m.title;
+  const titleAt = tbl.table.tableRows[0].tableCells[0].content[0].startIndex;
+  if (title) {
+    reqs.push({ insertText: { location: { index: titleAt }, text: title } });
+    reqs.push({
+      updateTextStyle: {
+        range: { startIndex: titleAt, endIndex: titleAt + title.length },
+        textStyle: { bold: false, fontSize: { magnitude: 8, unit: "PT" }, weightedFontFamily: { fontFamily: "Arial" }, foregroundColor: rgb(th.titleFg) },
+        fields: "bold,fontSize,weightedFontFamily,foregroundColor",
+      },
+    });
+    reqs.push({
+      updateParagraphStyle: {
+        range: { startIndex: titleAt, endIndex: titleAt + title.length },
+        paragraphStyle: { alignment: th.chrome === "ubuntu" || th.chrome === "macos" ? "CENTER" : "START", spaceAbove: { magnitude: 0, unit: "PT" }, spaceBelow: { magnitude: 0, unit: "PT" } },
+        fields: "alignment,spaceAbove,spaceBelow",
+      },
+    });
+  }
+  return reqs;
 }

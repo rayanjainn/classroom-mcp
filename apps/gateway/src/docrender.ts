@@ -90,6 +90,13 @@ export function specToEditBlocks(spec: DocSpecT): DocsRender {
       case "pagebreak":
         out.push({ type: "pagebreak" });
         break;
+      case "terminal":
+        out.push(b);
+        break;
+      case "ui":
+        notes.push("UI mockups are only drawn in the LaTeX output; in Google Docs they are skipped.");
+        out.push({ type: "paragraph", text: `*Figure: ${b.caption} (UI mockup omitted in Google Docs output)*` });
+        break;
       case "chart": {
         cap(`Figure: ${b.caption}`);
         const cats = b.categories ?? [...new Set(b.series.flatMap((s) => s.x ?? s.y.map((_, i) => i + 1)))].map(String);

@@ -50,3 +50,19 @@ assert.ok(cite.lint.some((l) => /missing/.test(l.message)));
 const empty = buildAppend([{ type: "list", ordered: false, items: [] }], 5);
 assert.equal(empty.requests.length, 0);
 console.log("hardening tests passed");
+
+// terminal -> Google Docs requests stay inside the cell text they create
+import { terminalRequests } from "../apps/gateway/src/docapply.ts";
+import { Terminal } from "@classroompilot/shared";
+const tspec = Terminal.parse({ type: "terminal", theme: "ubuntu", source: "illustrative", caption: "c", alt: "a", entries: [{ cmd: "ls", output: "\u001b[34mdir\u001b[0m  file" }] });
+const fakeTbl = { startIndex: 10, table: { tableRows: [{ tableCells: [{ content: [{ startIndex: 14 }] }] }, { tableCells: [{ content: [{ startIndex: 16 }] }] }] } };
+const treqs = terminalRequests(fakeTbl, tspec);
+const ins = treqs.filter((r: any) => r.insertText);
+assert.equal(ins.length, 2);
+const body = ins.find((r: any) => r.insertText.location.index === 16).insertText.text as string;
+assert.ok(body.startsWith("user@ubuntu:~$ ls\ndir  file\nuser@ubuntu:~$"), JSON.stringify(body));
+for (const r of treqs) if (r.updateTextStyle && r.updateTextStyle.range.startIndex >= 16)
+  assert.ok(r.updateTextStyle.range.endIndex <= 16 + body.length, "style range beyond body");
+const blue = treqs.find((r: any) => r.updateTextStyle?.textStyle?.foregroundColor && r.updateTextStyle.range.startIndex === 16 + "user@ubuntu:~$ ls\n".length);
+assert.ok(blue, "ANSI colour run should be styled");
+console.log("terminal tests passed");
