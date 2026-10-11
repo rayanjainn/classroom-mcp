@@ -20,6 +20,10 @@ small{opacity:.8}
 <h1>Share a file with ClassroomPilot</h1>
 <p>Your assistant needs to read <strong id="fname">a file</strong> from your Classroom. Google only lets an app open files you pick yourself, so choose it once here.</p>
 <p><small>The file is read in this browser tab. Only its extracted text is sent to ClassroomPilot and kept for 30 days. The file itself is never copied or changed.</small></p>
+<h2>Option 1: upload the file from your computer</h2>
+<p>Download the attachment from Classroom (open it, then File &gt; Download), then choose it here. This needs no Google sign-in.</p>
+<p><input id="upload" type="file" accept=".pdf,.docx,.txt,.md,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled></p>
+<h2>Option 2: pick it from Google Drive</h2>
 <p><button id="go" disabled>Choose the file in Google Drive</button></p>
 <div id="status" role="status">Loading&hellip;</div>
 <pre id="debug" hidden style="font-size:13px;white-space:pre-wrap;word-break:break-all"></pre>

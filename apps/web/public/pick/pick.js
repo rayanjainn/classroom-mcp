@@ -30,7 +30,11 @@
     }
     if (!r.ok) return say("This link has expired. Ask your assistant to read the file again.", "err");
     session = await r.json();
-    if (!session.apiKey || !session.appId) return say("File picking is not configured on this server yet.", "err");
+    $("upload").disabled = false;
+    if (!session.apiKey || !session.appId) {
+      $("go").hidden = true;
+      return say("Ready. Choose the file from your computer above (Google Drive picking is not configured on this server).");
+    }
     if (new URLSearchParams(location.search).has("debug")) {
       const mask = (v) => (v ? v.slice(0, 6) + "\u2026" + v.slice(-4) + " (" + v.length + " chars)" : "(missing)");
       $("debug").hidden = false;
@@ -47,7 +51,7 @@
     if (new URLSearchParams(location.search).has("debug") && session.apiKey) runKeyTest();
     if (session.name) $("fname").textContent = session.name;
     $("go").disabled = false;
-    say("Ready. Click the button to choose the file.");
+    say("Ready. Upload the file above, or use the Google Drive button.");
   }
 
   // Calls Google from this page, so the key is checked against this exact origin and referrer.
@@ -151,42 +155,65 @@
     throw new Error("This file type (" + mime + ") cannot be read yet. Supported: PDF, Word (.docx), text, Google Docs.");
   }
 
-  async function run() {
+  async function finish(doc, data) {
+    const ex = await extract(doc, data);
+    let text = (ex.text || "").replace(/[ \t]+\n/g, "\n").trim();
+    if (!text) throw new Error("No text found. This looks like a scanned or image-only file; ask your assistant to work from a typed copy instead.");
+    const truncated = text.length > MAX_CHARS;
+    if (truncated) text = text.slice(0, MAX_CHARS);
+    say("Sending the text to ClassroomPilot\u2026");
+    const r = await fetch(`${API}/pick/${sid}/submit`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ fileId: doc.id, name: doc.name, mime: doc.mimeType, text, pages: ex.pages, truncated }),
+    });
+    if (!r.ok) throw new Error("ClassroomPilot rejected the upload (" + r.status + "). The link may have expired.");
+    say(`Done: "${doc.name}" is ready. Go back to your assistant and ask it to read the file again.`, "ok");
+  }
+
+  const guessMime = (f) => {
+    if (f.type) return f.type;
+    const n = f.name.toLowerCase();
+    return n.endsWith(".pdf") ? "application/pdf" : n.endsWith(".docx") ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : "text/plain";
+  };
+
+  async function onUpload() {
+    const f = $("upload").files[0];
+    if (!f) return;
+    $("upload").disabled = true;
     $("go").disabled = true;
     try {
-      say("Signing in with Google…");
-      const token = await getToken();
-      say("Choose the file in the Google window…");
-      const doc = await pick(token);
-      if (!doc) {
-        $("go").disabled = false;
-        return say("Cancelled. Click the button to try again.");
-      }
-      say("Downloading…");
-      const data = await download(token, doc);
-      const ex = await extract(doc, data);
-      let text = (ex.text || "").replace(/[ \t]+\n/g, "\n").trim();
-      if (!text) {
-        $("go").disabled = false;
-        return say("No text found. This looks like a scanned or image-only file; ask your assistant to work from a typed copy instead.", "err");
-      }
-      const truncated = text.length > MAX_CHARS;
-      if (truncated) text = text.slice(0, MAX_CHARS);
-      say("Sending the text to ClassroomPilot…");
-      const r = await fetch(`${API}/pick/${sid}/submit`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ fileId: doc.id, name: doc.name, mime: doc.mimeType, text, pages: ex.pages, truncated }),
-      });
-      if (!r.ok) throw new Error("ClassroomPilot rejected the upload (" + r.status + "). The link may have expired.");
-      say(`Done: "${doc.name}" is ready. Go back to your assistant and ask it to read the file again.`, "ok");
-      $("go").disabled = false;
+      if (f.size > 40 * 1024 * 1024) throw new Error("That file is larger than 40 MB.");
+      say("Reading the file\u2026");
+      // Stored under the attachment the assistant asked about (or a fresh id when none was named).
+      const id = session.expectFileId || "upload-" + Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+      await finish({ id, name: f.name, mimeType: guessMime(f) }, { buf: await f.arrayBuffer() });
     } catch (e) {
-      $("go").disabled = false;
       say(e && e.message ? e.message : "Something went wrong.", "err");
+    } finally {
+      $("upload").disabled = false;
+      $("go").disabled = Boolean(!session.apiKey);
     }
   }
 
+  async function run() {
+    $("go").disabled = true;
+    try {
+      say("Signing in with Google\u2026");
+      const token = await getToken();
+      say("Choose the file in the Google window\u2026");
+      const doc = await pick(token);
+      if (!doc) return say("Cancelled. Click the button to try again.");
+      say("Downloading\u2026");
+      await finish(doc, await download(token, doc));
+    } catch (e) {
+      say(e && e.message ? e.message : "Something went wrong.", "err");
+    } finally {
+      $("go").disabled = false;
+    }
+  }
+
+  $("upload").addEventListener("change", onUpload);
   $("go").addEventListener("click", run);
   init();
 })();

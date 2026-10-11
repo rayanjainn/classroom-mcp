@@ -20,8 +20,6 @@ export interface PickSession {
   name?: string;
 }
 
-export const pickerEnabled = (env: Env) => Boolean(env.PICKER_API_KEY && env.GCP_PROJECT_NUMBER);
-
 export async function createPickSession(env: Env, s: PickSession): Promise<string> {
   const id = crypto.randomUUID().replace(/-/g, "");
   await env.OAUTH_KV.put(`cp:pick:${id}`, JSON.stringify(s), { expirationTtl: 1800 });

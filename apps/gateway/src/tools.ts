@@ -5,7 +5,7 @@ import { GoogleError, gget } from "./google.js";
 import { makeKit, UNTRUSTED_NOTE, ok, wrap } from "./toolkit.js";
 import * as cr from "./classroom.js";
 import { readGoogleFile } from "./files.js";
-import { createPickSession, getPicked, pickerEnabled } from "./context.js";
+import { createPickSession, getPicked } from "./context.js";
 import { applyEdits } from "./docapply.js";
 import { EditBlock, planDeletions } from "./docedit.js";
 import {
@@ -253,7 +253,7 @@ export function registerTools(server: McpServer, env: Env, props: Props) {
   server.registerTool(
     "read_attachment",
     {
-      description: `Read the text of a Google Doc, Slides deck or Sheet attached to Classroom work (use the file id from an attachment's "id"). Works for Google files the student can open. For PDF, Word and text files it returns a one-time pickerLink the student opens to share the file (read in their browser), after which calling this again returns the text. Returns a clear reason when a file cannot be read. ${UNTRUSTED_NOTE}`,
+      description: `Read the text of a Google Doc, Slides deck or Sheet attached to Classroom work (use the file id from an attachment's "id"). Works for Google files the student can open. For PDF, Word and text files it returns a one-time pickerLink where the student uploads the downloaded file or picks it from Drive (read in their browser), after which calling this again returns the text. Returns a clear reason when a file cannot be read. ${UNTRUSTED_NOTE}`,
       inputSchema: { fileId: z.string(), name: z.string().max(200).optional().describe("The attachment title, shown on the picker page") },
     },
     runWith<{ fileId: string; name: string | undefined }>(async (t, { fileId, name }) => {
@@ -271,14 +271,14 @@ export function registerTools(server: McpServer, env: Env, props: Props) {
         };
       const r = await readGoogleFile(t, fileId);
       if (r.ok) return { ...r, text: wrap(`drive:${fileId}`, r.text) };
-      if (!pickerEnabled(env) || /no access/i.test(r.reason)) return r;
+      if (/no access/i.test(r.reason)) return r;
       const sid = await createPickSession(env, { userId: props.userId, expectFileId: fileId, name });
       return {
         ...r,
         needsPicker: true,
         pickerLink: `${env.WEB_ORIGIN}/pick/?s=${sid}`,
         pickerLinkExpires: "30 minutes",
-        next: "Tell the student to open pickerLink and choose the file once (PDF, Word and text files are supported). Then call read_attachment again with the same fileId.",
+        next: "Tell the student to open pickerLink and either upload the file they downloaded from Classroom (easiest, no Google sign-in) or pick it from Google Drive. PDF, Word (.docx) and text files are supported. Then call read_attachment again with the same fileId.",
       };
     }),
   );

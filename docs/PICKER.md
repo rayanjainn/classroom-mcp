@@ -1,4 +1,8 @@
-# Enabling the file picker (PDF / Word reading)
+# Reading PDFs and Word files
+
+`read_attachment` returns a one-time link to a small page (`/pick/`). There the student can **upload the file they downloaded from Classroom** (needs no setup and no Google sign-in) or **pick it from Google Drive** (needs the Google Cloud setup below; optional).
+
+## Optional: Google Drive picking
 
 Google only lets this app open Drive files that the student picks, so reading PDFs and Word files goes through a small page on `classroom.raycode.tech/pick/`. It needs three things in Google Cloud:
 
