@@ -44,9 +44,31 @@
         "user agent:   " + navigator.userAgent,
       ].join("\n");
     }
+    if (new URLSearchParams(location.search).has("debug") && session.apiKey) runKeyTest();
     if (session.name) $("fname").textContent = session.name;
     $("go").disabled = false;
     say("Ready. Click the button to choose the file.");
+  }
+
+  // Calls Google from this page, so the key is checked against this exact origin and referrer.
+  async function runKeyTest() {
+    const out = [];
+    const probe = async (label, url) => {
+      try {
+        const r = await fetch(url);
+        const j = await r.json().catch(() => ({}));
+        const reason = (j.error && (j.error.details && j.error.details[0] && j.error.details[0].reason || j.error.errors && j.error.errors[0] && j.error.errors[0].reason)) || "";
+        out.push(label + ": HTTP " + r.status + " " + reason + " " + ((j.error && j.error.message) || "").slice(0, 120));
+      } catch (e) {
+        out.push(label + ": request failed (" + e.message + ")");
+      }
+      $("debug").textContent = $("debug").textContent.split("\n--- key test ---")[0] + "\n--- key test ---\n" + out.join("\n");
+    };
+    const k = encodeURIComponent(session.apiKey);
+    await probe("Drive API files.list  ", `https://www.googleapis.com/drive/v3/files?pageSize=1&key=${k}`);
+    await probe("Drive API about       ", `https://content.googleapis.com/drive/v3/about?fields=kind&key=${k}`);
+    out.push("Reading the result: 'Login Required' / 401 = key accepted. API_KEY_HTTP_REFERRER_BLOCKED = website restriction does not match this page. API_KEY_SERVICE_BLOCKED = an API is missing from the key's API restrictions. API_KEY_INVALID = wrong key.");
+    $("debug").textContent = $("debug").textContent.split("\n--- key test ---")[0] + "\n--- key test ---\n" + out.join("\n");
   }
 
   async function getToken() {
